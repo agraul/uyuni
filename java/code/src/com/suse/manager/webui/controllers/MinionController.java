@@ -20,6 +20,7 @@ import static com.suse.manager.webui.utils.SparkApplicationHelper.withUser;
 import static com.suse.manager.webui.utils.SparkApplicationHelper.withUserPreferences;
 import static spark.Spark.get;
 
+import com.redhat.rhn.common.db.datasource.DataResult;
 import com.redhat.rhn.domain.org.OrgFactory;
 import com.redhat.rhn.domain.server.MinionServer;
 import com.redhat.rhn.domain.server.MinionServerFactory;
@@ -34,6 +35,7 @@ import com.redhat.rhn.frontend.dto.SystemOverview;
 import com.redhat.rhn.frontend.struts.ActionChainHelper;
 import com.redhat.rhn.frontend.xmlrpc.system.SystemHandler;
 import com.redhat.rhn.manager.ssm.SsmManager;
+import com.redhat.rhn.manager.system.SystemManager;
 import com.redhat.rhn.manager.token.ActivationKeyManager;
 
 import com.suse.manager.utils.MinionServerUtils;
@@ -188,7 +190,9 @@ public class MinionController {
      * @return the ModelAndView object to render the page
      */
     public static ModelAndView orgRecurringStates(Request request, Response response, User user) {
-        Set<Long> systems = Arrays.stream(new SystemHandler().listSystems(user))
+        DataResult<SystemOverview> dr = SystemManager.systemListShort(user, null);
+        dr.elaborate();
+        Set<Long> systems = Arrays.stream(dr.toArray())
                 .map(system -> ((SystemOverview) system).getId()).
                         collect(Collectors.toSet());
         List<Server> servers = ServerFactory.lookupByIdsAndOrg(systems, user.getOrg());
@@ -230,7 +234,9 @@ public class MinionController {
      */
     public static ModelAndView yourOrgRecurringStates(Request request, Response response,
                                                      User user) {
-        Set<Long> systems = Arrays.stream(new SystemHandler().listSystems(user))
+        DataResult<SystemOverview> dr = SystemManager.systemListShort(user, null);
+        dr.elaborate();
+        Set<Long> systems = Arrays.stream(dr.toArray())
                 .map(system -> ((SystemOverview) system).getId()).
                 collect(Collectors.toSet());
         List<Server> servers = ServerFactory.lookupByIdsAndOrg(systems, user.getOrg());
