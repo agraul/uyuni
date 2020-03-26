@@ -30,6 +30,14 @@ mgr_pushimage:
       - module: mgr_buildimage
       - module: mgr_registries_login
 
+mgr_registries_logout:
+  module.run:
+    - name: docker.logout
+    - registries: {{ pillar.get('docker-registries', {}).keys() | list }}
+    - require:
+      - module: mgr_pushimage
+      - module: mgr_registries_login
+
 {% else %}
 
 mgr_registries_login:
