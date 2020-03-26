@@ -41,6 +41,14 @@ mgr_image_remove:
       - "{{ pillar.get('imagename') }}"
     - force: False
 
+mgr_registries_logout:
+  module.run:
+    - name: docker.logout
+    - registries: {{ pillar.get('docker-registries', {}).keys() | list }}
+    - require:
+      - module: mgr_registries_login_inspect
+      - module: mgr_image_profileupdate
+
 {% else %}
 
 mgr_registries_login_inspect:
