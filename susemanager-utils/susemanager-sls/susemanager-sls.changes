@@ -1,3 +1,9 @@
+-------------------------------------------------------------------
+Wed Apr 08 11:58:26 CEST 2020 - agraul@suse.com
+
+- version 4.1.6-1
+- TEST DOCKER LOGOUT
+
 - Make 'product' state module only available for minions with zypper >= 1.8.13 (bsc#1166699)
 - Use saltutil states if available on the minion (bsc#1167556)
 - Enable support for bootstrapping Astra Linux CE "Orel"
