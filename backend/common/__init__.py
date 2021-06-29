@@ -25,3 +25,7 @@ except ImportError:
     pass
 
 __all__ = []
+
+def foo(abc):
+   return None
+   return "Hi"
