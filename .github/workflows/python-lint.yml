@@ -1,0 +1,33 @@
+name: Pylint
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**.py'
+  push:
+    branches:
+      - master
+    paths:
+      - 'backend/**.py'
+
+jobs:
+  lint-backend:
+    runs-on: ubuntu-latest
+    container: registry.opensuse.org/home/agraul/branches/systemsmanagement/uyuni/master/docker/containers/uyuni-master-pylint
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Get changed files
+      id: files
+      uses: Ana06/get-changed-files@v1.2
+      with:
+        filter: '*.py'
+
+    - name: Run pylint-ignore on added/modified files
+      run: |
+        export FILES=$(for f in ${{ steps.files.outputs.added_modified }}; do echo $f | sed 's,backend/,,' -; done)
+        make -f Makefile.python __pylint-ignore
