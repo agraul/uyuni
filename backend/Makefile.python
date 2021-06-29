@@ -8,11 +8,14 @@ DOCKER_REGISTRY       = registry.opensuse.org
 DOCKER_RUN_EXPORT     = "PYTHONPATH=$PYTHONPATH"
 DOCKER_VOLUMES        = -v "$(CURDIR)/..:/manager"
 
+FILES ?= $(shell find -name '*.py')
+DOCKER_RUN_EXPORT += -e "FILES=$(FILES)"
+
 __pylint ::
-	pylint --rcfile=pylintrc $(shell find -name '*.py') > reports/pylint.log
+	pylint --rcfile=pylintrc $(FILES) > reports/pylint.log
 
 __pylint-ignore ::
-	pylint-ignore --rcfile=pylintrc $(shell find -name '*.py') >reports/pylint.log
+	pylint-ignore --rcfile=pylintrc $(FILES) >reports/pylint.log
 
 docker_pylint ::
 	docker run --rm -e $(DOCKER_RUN_EXPORT) $(DOCKER_VOLUMES) $(DOCKER_REGISTRY)/$(DOCKER_CONTAINER_BASE)-pylint /bin/sh -c "cd /manager/backend; make -f Makefile.python __pylint"
