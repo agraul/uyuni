@@ -12,10 +12,10 @@ FILES ?= $(shell find -name '*.py')
 DOCKER_RUN_EXPORT += -e "FILES=$(FILES)"
 
 __pylint ::
-	pylint --rcfile=pylintrc $(FILES) > reports/pylint.log
+	pylint --rcfile=pylintrc $(FILES)
 
 __pylint-ignore ::
-	pylint-ignore --rcfile=pylintrc $(FILES) >reports/pylint.log
+	pylint-ignore --rcfile=pylintrc $(FILES)
 
 docker_pylint ::
 	docker run --rm -e $(DOCKER_RUN_EXPORT) $(DOCKER_VOLUMES) $(DOCKER_REGISTRY)/$(DOCKER_CONTAINER_BASE)-pylint /bin/sh -c "cd /manager/backend; make -f Makefile.python __pylint"
