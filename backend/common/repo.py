@@ -2,6 +2,7 @@
 Repository tools
 """
 # coding: utf-8
+import pathlib
 import typing
 import http
 import os
@@ -19,7 +20,7 @@ import requests
 # pylint:disable=W0612,W0212,C0301
 
 SPACEWALK_LIB = '/var/lib/spacewalk'
-SPACEWALK_GPG_HOMEDIR = os.path.join(SPACEWALK_LIB, 'gpgdir')
+SPACEWALK_GPG_KEYRING = pathlib.Path(SPACEWALK_LIB, "gpgdir", "pubring.gpg")
 
 
 class GeneralRepoException(Exception):
@@ -202,79 +203,88 @@ class DpkgRepo:
 
         return self._release
 
+    def _has_valid_gpg_signature(
+        self, uri: str, response: requests.Response = None
+    ) -> bool:
+        """Validate the GPG signature of the Release file.
 
-    def _has_valid_gpg_signature(self, uri: str, response=None) -> bool:
-        """
-        Validate GPG signature of Release file.
+        :param uri: URI to index (Release file).
+        :param response: HTTP response of the Release file download. If None, an
+            already downloaded file is assumed. Defaults to None.
+        :returns: bool
 
-        :return: bool
         """
-        process = None
         uri = uri.replace("file://", "")
-        if not response:
-            # There is no response, so this is a local path.
-            if os.access(os.path.join(uri, "InRelease"), os.R_OK):
-                release_file = os.path.join(uri, "InRelease")
-                process = subprocess.Popen(
-                    ["gpg", "--verify", "--homedir", SPACEWALK_GPG_HOMEDIR, release_file],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                out = process.wait(timeout=90)
-            elif os.access(os.path.join(uri, "Release"), os.R_OK):
-                release_file = os.path.join(uri, "Release")
-                release_signature_file = os.path.join(uri, "Release.gpg")
-                if os.access(release_signature_file, os.R_OK):
-                    process = subprocess.Popen(
-                        ["gpg", "--verify", "--homedir", SPACEWALK_GPG_HOMEDIR,
-                        release_signature_file, release_file],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    out = process.wait(timeout=90)
-                else:
-                    logging.error("Signature file for GPG check could not be accessed: \
-                                   '{}. Raising GeneralRepoException.".format(release_signature_file))
-                    raise GeneralRepoException("Signature file for GPG check could not be accessed: {}".format(release_signature_file))
-            else:
-                logging.error("No release file found: '{}'. Raising GeneralRepoException.".format(uri))
-                raise GeneralRepoException("No release file found: {}".format(uri))
-        else:
-            # There is a response, so we are dealing with a URL.
-            if parse.urlparse(response.url).path.endswith("InRelease"):
-                process = subprocess.Popen(
-                    ["gpg", "--verify", "--homedir", SPACEWALK_GPG_HOMEDIR],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                out = process.communicate(response.content, timeout=90)
-            else:
-                signature_response = requests.get(self._get_parent_url(response.url, 1, "Release.gpg"), proxies=self.proxies)
-                if signature_response.status_code != http.HTTPStatus.OK:
-                    return False
-                else:
-                    temp_release_file = tempfile.NamedTemporaryFile()
-                    temp_release_file.write(response.content)
-                    temp_release_file.seek(0)
-                    temp_signature_file = tempfile.NamedTemporaryFile()
-                    temp_signature_file.write(signature_response.content)
-                    temp_signature_file.seek(0)
-                    process = subprocess.Popen(
-                        ["gpg", "--verify", "--homedir", SPACEWALK_GPG_HOMEDIR,
-                        temp_signature_file.name, temp_release_file.name],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    out = process.wait(timeout=90)
 
-        if process.returncode == 0:
-            logging.debug("GPG signature is valid")
+        if not response:
+            # InRelease in local filesystem
+            release_file = pathlib.Path(uri, "InRelease")
+            detached_signature_file = None
+            if not release_file.exists():
+                # Release + Release.gpg in local filesystem
+                release_file = pathlib.Path(uri, "Release")
+                detached_signature_file = pathlib.Path(uri, "Release.gpg")
+        else:
+            # HTTP response
+            parts = parse.urlparse(response.url)  # TODO: why not uri?
+            if parts.path.endswith("InRelease"):
+                tmp_release_file = tempfile.NamedTemporaryFile()
+                tmp_release_file.write(response.content)
+                tmp_release_file.seek(0)
+                release_file = tmp_release_file.name
+                detached_signature_file = None
+            else:
+                tmp_release_file = tempfile.NamedTemporaryFile()
+                tmp_release_file.write(response.content)
+                tmp_release_file.seek(0)
+                release_file = tmp_release_file.name
+                tmp_signature_file = tempfile.NamedTemporaryFile()
+                signature_response = requests.get(
+                    self._get_parent_url(response.url, 1, "Release.gpg"),
+                    proxies=self.proxies,
+                )
+                tmp_signature_file.write(signature_response.content)
+                tmp_signature_file.seek(0)
+                detached_signature_file = tmp_signature_file.name
+        return self._run_gpgv(release_file, detached_signature_file)
+
+    def _run_gpgv(
+        self,
+        signed_file: typing.Union[pathlib.Path, str],
+        signature_file: typing.Union[pathlib.Path, str, None] = None,
+    ) -> bool:
+        """Run gpgv to verify GPG signatures.
+
+        :param signed_file: Path to signed file.
+        :param signature_file: Path to detached signature file. If not passed,
+            ``signed_file`` must be signed inline.
+        :returns:
+
+        """
+        del self # not needed -> TODO: move outside of class
+        cmd = [
+            "gpgv",
+            "--keyring",
+            str(SPACEWALK_GPG_KEYRING),
+            str(signed_file),
+        ]
+        if signature_file is not None:
+            cmd.append(str(signature_file))
+        # Checking the return code does not work well. gpgv returns 0 only
+        # if all signatures are verified. Repo metadata is often signed by
+        # multiple keys and new keys can be added at any time. Instead, we
+        # check the output for a known indicator that at least one signature
+        # could be verified.
+        proc = subprocess.run(cmd, stderr=subprocess.PIPE, timeout=90)
+        logging.debug(
+            "gpgv finished with exit code %(retcode)s: %(stderr)s",
+            {"retcode": proc.returncode, "stderr": proc.stderr},
+        )
+        if "Good signature" in str(proc.stderr):
             return True
         else:
-            logging.debug("GPG signature is invalid. gpg return code: {}".format(process.returncode))
+            logging.debug("gpgv output: %s", proc.stderr)
             return False
-
 
     def get_release_index(self) -> typing.Dict[str, "DpkgRepo.ReleaseEntry"]:
         """
