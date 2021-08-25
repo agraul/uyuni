@@ -227,18 +227,37 @@ class TestCommonRepo:
                 url="http://dummy/url/InRelease",
         )
 
-        mock_popen = MagicMock()
-        mock_communicate = MagicMock()
-        mock_popen().communicate = mock_communicate
-        mock_popen().returncode = 0
+        mock_completed_process = MagicMock()
+        mock_completed_process.stderr = """
+        gpgv: Signature made Sat 14 Aug 2021 10:28:03 CEST
+        gpgv:                using RSA key 6D33866EDD8FFA41C0143AEDDCC9EFBF77E11517
+        gpgv:                issuer "debian-release@lists.debian.org"
+        gpgv: Good signature from "Debian Stable Release Key (10/buster) <debian-release@lists.debian.org>"
+        """
+        mock_run = MagicMock(return_value=mock_completed_process)
+        mock_tempfile = MagicMock(name='NamedTemporaryFile')
 
-        with patch("spacewalk.common.repo.subprocess.Popen", mock_popen):
+        with patch("spacewalk.common.repo.subprocess.run", mock_run), patch(
+            "spacewalk.common.repo.tempfile.NamedTemporaryFile", mock_tempfile
+        ):
             assert repo._has_valid_gpg_signature(response.url, response)
-            mock_communicate.assert_called_once_with(b"dummy content", timeout=90)
+            mock_run.assert_called_once()
+            gpgv_args = mock_run.call_args[0][0]
+            assert gpgv_args[0] == "gpgv"
+            assert gpgv_args[1] == "--keyring"
+            assert gpgv_args[2] == "/var/lib/spacewalk/gpgdir/pubring.gpg"
+            assert "MagicMock name='NamedTemporaryFile" in gpgv_args[3]
+            assert mock_run.call_args.kwargs["timeout"] == 90
 
-    @patch("spacewalk.common.repo.tempfile.NamedTemporaryFile", MagicMock())
-    @patch("spacewalk.common.repo.requests.get", MagicMock(
-        return_value=FakeRequests().conf(status_code=http.HTTPStatus.OK, content=b"", url="")))
+    @patch(
+        "spacewalk.common.repo.requests.get",
+        MagicMock(
+            return_value=FakeRequests().conf(
+                status_code=http.HTTPStatus.OK, content=b"", url=""
+            )
+        ),
+    )
+
     def test_has_valid_gpg_signature_call_Release(self):
         """
         Test _has_valid_gpg_signature call with a detached GPG signature (Release + Release.gpg).
@@ -248,26 +267,35 @@ class TestCommonRepo:
 
         repo = DpkgRepo("http://dummy/url/Release")
         response = FakeRequests().conf(
-                content=b"dummy content",
-                url="http://dummy/url/Release",
+            content=b"dummy content",
+            url="http://dummy/url/Release",
         )
-        mock_popen = MagicMock()
-        mock_popen().returncode = 0
-
-        with patch("spacewalk.common.repo.subprocess.Popen", mock_popen):
-            assert repo._has_valid_gpg_signature(response.url, response)
-            mock_popen.assert_called_once
-            gpg_args = mock_popen.call_args[0][0]
-            assert gpg_args[0] == "gpg"
-            assert gpg_args[1] == "--verify"
-            assert gpg_args[2] == "--homedir"
-            assert gpg_args[3] == "/var/lib/spacewalk/gpgdir"
-            assert gpg_args[4].beginswith("/tmp/")
-            assert gpg_args[5].beginswith("/tmp/")
-
-    def test_has_valid_gpg_signature_returns_false_if_gpg_verify_fails(self):
+        mock_completed_process = MagicMock()
+        mock_completed_process.stderr = """
+        gpgv: Signature made Sat 14 Aug 2021 10:28:03 CEST
+        gpgv:                using RSA key 6D33866EDD8FFA41C0143AEDDCC9EFBF77E11517
+        gpgv:                issuer "debian-release@lists.debian.org"
+        gpgv: Good signature from "Debian Stable Release Key (10/buster) <debian-release@lists.debian.org>"
         """
-        Test _has_valid_gpg_signature returns False if gpg --verify returns non-zero.
+        mock_run = MagicMock(return_value=mock_completed_process)
+        mock_tempfile = MagicMock(name='NamedTemporaryFile')
+
+        with patch("spacewalk.common.repo.subprocess.run", mock_run), patch(
+            "spacewalk.common.repo.tempfile.NamedTemporaryFile", mock_tempfile
+        ):
+            assert repo._has_valid_gpg_signature(response.url, response)
+            mock_run.assert_called_once()
+            gpgv_args = mock_run.call_args[0][0]
+            assert gpgv_args[0] == "gpgv"
+            assert gpgv_args[1] == "--keyring"
+            assert gpgv_args[2] == "/var/lib/spacewalk/gpgdir/pubring.gpg"
+            assert "MagicMock name='NamedTemporaryFile" in gpgv_args[3]
+            assert "MagicMock name='NamedTemporaryFile" in gpgv_args[4]
+            assert mock_run.call_args.kwargs["timeout"] == 90
+
+    def test_has_valid_gpg_signature_returns_false_if_gpgv_fails(self):
+        """
+        Test _has_valid_gpg_signature returns False if verification fails.
 
         :return:
         """
@@ -276,10 +304,18 @@ class TestCommonRepo:
                 content=b"dummy content",
                 url="http://dummy/url/InRelease",
         )
-        mock_popen = MagicMock()
-        mock_popen().returncode = 1
+        mock_completed_process = MagicMock()
+        mock_completed_process.stderr = """
+        gpgv: Signature made Sat 14 Aug 2021 10:44:59 CEST
+        gpgv:                using RSA key A7236886F3CCCAAD148A27F80E98404D386FA1D9
+        gpgv: Can't check signature: No public key
+        """
+        mock_run = MagicMock(return_value=mock_completed_process)
+        mock_tempfile = MagicMock(name='NamedTemporaryFile')
 
-        with patch("spacewalk.common.repo.subprocess.Popen", mock_popen):
+        with patch("spacewalk.common.repo.subprocess.run", mock_run), patch(
+            "spacewalk.common.repo.tempfile.NamedTemporaryFile", mock_tempfile
+        ):
             assert not repo._has_valid_gpg_signature(response.url, response)
 
 
