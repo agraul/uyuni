@@ -17,6 +17,8 @@ from collections import namedtuple
 
 import requests
 
+from spacewalk.common import gpgv
+
 # pylint:disable=W0612,W0212,C0301
 
 SPACEWALK_LIB = '/var/lib/spacewalk'
@@ -219,72 +221,38 @@ class DpkgRepo:
         if not response:
             # InRelease in local filesystem
             release_file = pathlib.Path(uri, "InRelease")
-            detached_signature_file = None
-            if not release_file.exists():
+            if release_file.exists():
+                return gpgv.gpgv(signed_file=release_file, keyring=SPACEWALK_GPG_KEYRING)
+            else:
                 # Release + Release.gpg in local filesystem
                 release_file = pathlib.Path(uri, "Release")
                 detached_signature_file = pathlib.Path(uri, "Release.gpg")
+                return gpgv.gpgv_detached(signature_file=detached_signature_file,signed_file=release_file, keyring=SPACEWALK_GPG_KEYRING)
         else:
             # HTTP response
             parts = parse.urlparse(response.url)  # TODO: why not uri?
             if parts.path.endswith("InRelease"):
-                tmp_release_file = tempfile.NamedTemporaryFile()
-                tmp_release_file.write(response.content)
-                tmp_release_file.seek(0)
-                release_file = tmp_release_file.name
-                detached_signature_file = None
+                release_file = tempfile.NamedTemporaryFile()
+                release_file.write(response.content)
+                release_file.seek(0)
+                return gpgv.gpgv(signed_file=release_file, keyring=SPACEWALK_GPG_KEYRING)
             else:
-                tmp_release_file = tempfile.NamedTemporaryFile()
-                tmp_release_file.write(response.content)
-                tmp_release_file.seek(0)
-                release_file = tmp_release_file.name
-                tmp_signature_file = tempfile.NamedTemporaryFile()
+                release_gpg_uri =self._get_parent_url(response.url, 1, "Release.gpg")
                 signature_response = requests.get(
-                    self._get_parent_url(response.url, 1, "Release.gpg"),
+                    release_gpg_uri,
                     proxies=self.proxies,
                 )
-                tmp_signature_file.write(signature_response.content)
-                tmp_signature_file.seek(0)
-                detached_signature_file = tmp_signature_file.name
-        return self._run_gpgv(release_file, detached_signature_file)
+                if not signature_response.status_code == http.HTTPStatus.OK:
+                    logging.error("Can't retrieve Release.gpg from %s", release_gpg_uri)
+                    raise GeneralRepoException(f"Can't retrieve Release.gpg from {release_gpg_uri}")
 
-    def _run_gpgv(
-        self,
-        signed_file: typing.Union[pathlib.Path, str],
-        signature_file: typing.Union[pathlib.Path, str, None] = None,
-    ) -> bool:
-        """Run gpgv to verify GPG signatures.
-
-        :param signed_file: Path to signed file.
-        :param signature_file: Path to detached signature file. If not passed,
-            ``signed_file`` must be signed inline.
-        :returns:
-
-        """
-        del self # not needed -> TODO: move outside of class
-        cmd = [
-            "gpgv",
-            "--keyring",
-            str(SPACEWALK_GPG_KEYRING),
-            str(signed_file),
-        ]
-        if signature_file is not None:
-            cmd.append(str(signature_file))
-        # Checking the return code does not work well. gpgv returns 0 only
-        # if all signatures are verified. Repo metadata is often signed by
-        # multiple keys and new keys can be added at any time. Instead, we
-        # check the output for a known indicator that at least one signature
-        # could be verified.
-        proc = subprocess.run(cmd, stderr=subprocess.PIPE, timeout=90)
-        logging.debug(
-            "gpgv finished with exit code %(retcode)s: %(stderr)s",
-            {"retcode": proc.returncode, "stderr": proc.stderr},
-        )
-        if "Good signature" in str(proc.stderr):
-            return True
-        else:
-            logging.debug("gpgv output: %s", proc.stderr)
-            return False
+                release_file = tempfile.NamedTemporaryFile()
+                release_file.write(response.content)
+                release_file.seek(0)
+                signature_file = tempfile.NamedTemporaryFile()
+                signature_file.write(signature_response.content)
+                signature_file.seek(0)
+                return gpgv.gpgv_detached(signature_file=signature_file, signed_file=release_file)
 
     def get_release_index(self) -> typing.Dict[str, "DpkgRepo.ReleaseEntry"]:
         """
