@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=58.3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spacecmd"
+version = "4.4.7"
+requires-python = ">=3.6"
+description = "Command-line interface to Uyuni and SUSE Manager servers"
+
+[project.urls]
+"Homepage" = "https://github.com/uyuni-project/uyuni"
+
+[project.scripts]
+spacecmd = "spacecmd:__main__"

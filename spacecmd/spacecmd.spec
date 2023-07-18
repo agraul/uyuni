@@ -1,7 +1,7 @@
 #
 # spec file for package spacecmd
 #
-# Copyright (c) 2022 SUSE LLC
+# Copyright (c) 2023 SUSE LLC
 # Copyright (c) 2008-2018 Red Hat, Inc.
 # Copyright (c) 2011 Aron Parsons <aronparsons@gmail.com>
 #
@@ -17,32 +17,11 @@
 # Please submit bugfixes or comments via https://bugs.opensuse.org/
 #
 
-
-%if ! (0%{?fedora} || 0%{?rhel})
-%if "%{_vendor}" == "debbuild"
-%global __python /usr/bin/python3
-%endif
-%{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
-%{!?python_sitearch: %global python_sitearch %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))")}
-%endif
-
-%if 0%{?fedora} || 0%{?suse_version} > 1320 || 0%{?rhel} >= 8 || "%{_vendor}" == "debbuild"
-%global build_py3   1
-%if "%{_vendor}" != "debbuild"
-%global python_sitelib %{python3_sitelib}
-%endif
-%endif
-
-%if 0%{?fedora} || 0%{?rhel} >= 8
-%global python2prefix python2
-%else
-%global python2prefix python
-%endif
-
 Name:           spacecmd
 Version:        4.4.7
 Release:        1
-Summary:        Command-line interface to Spacewalk and Red Hat Satellite servers
+Summary:        Command-line interface to Uyuni and SUSE Manager servers
+
 License:        GPL-3.0-or-later
 %if "%{_vendor}" == "debbuild"
 Packager:       Uyuni packagers <devel@lists.uyuni-project.org>
@@ -53,9 +32,7 @@ Group:          Applications/System
 URL:            https://github.com/uyuni-project/uyuni
 Source:         https://github.com/spacewalkproject/spacewalk/archive/%{name}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-%if 0%{?fedora} || 0%{?rhel} || 0%{?suse_version} >= 1210 || "%{_vendor}" == "debbuild"
 BuildArch:      noarch
-%endif
 
 BuildRequires:  make
 %if "%{_vendor}" == "debbuild" || 0%{?rhel}
@@ -65,55 +42,24 @@ BuildRequires:  gettext
 BuildRequires:  intltool
 %endif
 
-%if 0%{?build_py3}
-BuildRequires:  python3
-%if "%{_vendor}" == "debbuild"
-BuildRequires:  python3-dev
-%else
-BuildRequires:  python3-devel
-BuildRequires:  python3-rpm-macros
-%endif
-Requires:       python3
-Requires:       python3-rpm
-Requires:       python3-dateutil
-%else
-BuildRequires:  %{python2prefix}
-%if "%{_vendor}" == "debbuild"
-BuildRequires:  %{python2prefix}-dev
-%else
-BuildRequires:  %{python2prefix}-devel
-%endif
-Requires:       %{python2prefix}-simplejson
-Requires:       %{python2prefix}-dateutil
-%if "%{_vendor}" == "debbuild"
+BuildRequires:  python-rpm-macros
+BuildRequires: %{python_module base >= 3.6}
+BuildRequires: %{python_module devel >= 3.6}
 Requires:       python-rpm
-%else
-Requires:       rpm-python
-%endif
-Requires:       %{python2prefix}
-%if 0%{?suse_version}
-BuildRequires:  python-xml
-Requires:       python-xml
-%endif
-%endif
+Requires:       python-dateutil
 Requires:       file
 
 %description
-spacecmd is a command-line interface to Spacewalk and Red Hat Satellite servers
+spacecmd is a command-line interface to Uyuni and SUSE Manager servers
 
 %prep
 %setup -q
 
 %build
-# nothing to build
+%pyproject_wheel
 
 %install
-%{__mkdir_p} %{buildroot}/%{_bindir}
-
-%if 0%{?build_py3}
-    sed -i 's|#!/usr/bin/python|#!/usr/bin/python3|' ./src/bin/spacecmd
-%endif
-%{__install} -p -m0755 src/bin/spacecmd %{buildroot}/%{_bindir}/
+%pyproject_install
 
 %{__mkdir_p} %{buildroot}/%{_sysconfdir}
 touch %{buildroot}/%{_sysconfdir}/spacecmd.conf
@@ -121,25 +67,14 @@ touch %{buildroot}/%{_sysconfdir}/spacecmd.conf
 %{__mkdir_p} %{buildroot}/%{_sysconfdir}/bash_completion.d
 %{__install} -p -m0644 src/misc/spacecmd-bash-completion %{buildroot}/%{_sysconfdir}/bash_completion.d/spacecmd
 
-%{__mkdir_p} %{buildroot}/%{python_sitelib}/spacecmd
-%{__install} -p -m0644 src/spacecmd/*.py %{buildroot}/%{python_sitelib}/spacecmd/
 
 %{__mkdir_p} %{buildroot}/%{_mandir}/man1
 %{__gzip} -c src/doc/spacecmd.1 > %{buildroot}/%{_mandir}/man1/spacecmd.1.gz
 
-touch %{buildroot}/%{python_sitelib}/spacecmd/__init__.py
-%{__chmod} 0644 %{buildroot}/%{python_sitelib}/spacecmd/__init__.py
-
-%if 0%{?suse_version}
-%if 0%{?build_py3}
-%py3_compile -O %{buildroot}/%{python_sitelib}
-%else
-%py_compile -O %{buildroot}/%{python_sitelib}
-%endif
-%endif
+%python_clone %{buildroot}/%{_bindir}/spacecmd
 
 make -C po install PREFIX=$RPM_BUILD_ROOT
-%find_lang spacecmd
+%python_find_lang spacecmd
 
 %files -f spacecmd.lang
 %defattr(-,root,root)
