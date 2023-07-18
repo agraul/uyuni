@@ -31,5 +31,8 @@ setup(
     packages=find_packages(where="src"),
     package_dir={
         "": "src",
+    },
+    entry_points={
+        "console_scripts": ["spacecmd = spacecmd:main"]
     }
 )
