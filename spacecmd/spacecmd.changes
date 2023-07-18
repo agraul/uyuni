@@ -1,5 +1,10 @@
-- Bypass traditional systems check on older SUMA instances (bsc#1208612)
-- fix argument parsing of distribution_update (bsc#1210458)
+-------------------------------------------------------------------
+Tue Jul 18 11:35:26 CEST 2023 - agraul@suse.com
+
+- version 5.0-1
+  * Use modern Python packaging for spacecmd
+  * Bypass traditional systems check on older SUMA instances (bsc#1208612)
+  * fix argument parsing of distribution_update (bsc#1210458)
 
 -------------------------------------------------------------------
 Wed Apr 19 12:49:39 CEST 2023 - marina.latini@suse.com

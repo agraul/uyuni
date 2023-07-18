@@ -18,7 +18,7 @@
 #
 
 Name:           spacecmd
-Version:        4.4.7
+Version:        5.0
 Release:        1
 Summary:        Command-line interface to Uyuni and SUSE Manager servers
 
