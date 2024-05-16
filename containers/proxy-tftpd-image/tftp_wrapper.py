@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2024 SUSE LLC
 #
 # SPDX-License-Identifier: MIT
+"""Configure script for Uyuni proxy tftp."""
 
 import argparse
 import logging
@@ -16,6 +17,7 @@ from fbtftp.base_server import BaseServer
 
 
 def stats(s):
+    del s
     pass
 
 
@@ -80,7 +82,7 @@ class HttpResponseDataFiltered(HttpResponseData):
 
     def __init__(self, url, capath, fqdn):
         # request file by url and store it
-        self._proxyFqdn = fqdn
+        self._proxy_fqdn = fqdn
         self._request = requests.get(url, stream=True, verify=capath)
         if self._request.status_code == 404:
             raise FileNotFoundError()
@@ -109,7 +111,7 @@ class HttpResponseDataFilteredPXE(HttpResponseDataFiltered):
                     in_entry = False
                     # detect Saltboot entries
                     if (
-                        " MASTER=" + self._proxyFqdn in entry
+                        " MASTER=" + self._proxy_fqdn in entry
                         and "MINION_ID_PREFIX" in entry
                     ):
                         have_entry = True
@@ -142,7 +144,7 @@ class HttpResponseDataFilteredGrub(HttpResponseDataFiltered):
                     in_entry = False
                     # detect Saltboot entries
                     if (
-                        " MASTER=" + self._proxyFqdn in entry
+                        " MASTER=" + self._proxy_fqdn in entry
                         and "MINION_ID_PREFIX" in entry
                     ):
                         have_entry = True
