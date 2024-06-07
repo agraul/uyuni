@@ -1,8 +1,6 @@
-#!/usr/bin/env python
 # pylint: disable=missing-module-docstring
-# -*- coding: utf-8 -*-
 #
-# Copyright (c) 2011 SUSE LLC
+# Copyright (c) 2011, 2024 SUSE LLC
 #
 # This software is licensed to you under the GNU General Public License,
 # version 2 (GPLv2). There is NO WARRANTY for this software, express or
@@ -17,8 +15,9 @@
 
 import inspect
 
-# pylint: disable-next=deprecated-module
-import imp
+import importlib
+import importlib.util
+import importlib.machinery
 import sys
 import unittest
 import json
@@ -101,8 +100,8 @@ class RepoSyncTest(unittest.TestCase):
         self.stderr.close()
         sys.stderr = self.saved_stderr
 
-        imp.reload(spacewalk.satellite_tools.reposync)
-        imp.reload(spacewalk.satellite_tools.appstreams)
+        importlib.reload(spacewalk.satellite_tools.reposync)
+        importlib.reload(spacewalk.satellite_tools.appstreams)
 
     def test_init_succeeds_with_correct_attributes(self):
         rs = _init_reposync(self.reposync, "Label", RTYPE)
@@ -1023,7 +1022,9 @@ class SyncTest(unittest.TestCase):
         config = {
             "return_value.fetchone_dict.return_value": {
                 "username": "user#1",
-                "password": base64.encodestring(password.encode()).decode(),
+                "password": base64.encodebytes(password.encode("utf-8")).decode(
+                    "utf-8"
+                ),
                 "type": "SCC",
             }
         }
@@ -1095,15 +1096,34 @@ class SyncTest(unittest.TestCase):
             )
 
 
+def _load_module_from_path(name, path):
+    """Load a Python module from a given path.
+
+    importlib.import_module() can only import real Python modules with a known file
+    extension. This helper function can import a given Python file based on name and path.
+
+    Based on https://stackoverflow.com/a/43602645
+    """
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, path)
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class RunScriptTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         satellite_tools_dir = os.path.dirname(
             inspect.getfile(spacewalk.satellite_tools)
         )
-        cls.repo_sync = imp.load_source(
-            "repo_sync", os.path.join(satellite_tools_dir, "spacewalk-repo-sync")
+        repo_sync = _load_module_from_path(
+            "spacewalk-repo-syn",
+            os.path.join(satellite_tools_dir, "spacewalk-repo-sync"),
         )
+        sys.modules["repo_sync"] = repo_sync
+        cls.repo_sync = repo_sync
 
     def setUp(self):
         config = dict(

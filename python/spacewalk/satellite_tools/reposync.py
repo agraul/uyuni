@@ -2409,9 +2409,9 @@ class RepoSync(object):
                 sys.exit(1)
             if credentials["type"] != "rhui":
                 url.username = credentials["username"]
-                url.password = base64.decodestring(
-                    credentials["password"].encode()
-                ).decode()
+                url.password = base64.decodebytes(
+                    credentials["password"].encode("utf-8")
+                ).decode("utf-8")
             # remove query parameter from url
             url.query = ""
             if "extra_auth" in credentials and credentials["extra_auth"]:
