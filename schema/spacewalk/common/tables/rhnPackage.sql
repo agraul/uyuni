@@ -46,9 +46,6 @@ CREATE TABLE rhnPackage
     source_rpm_id    NUMERIC
                          CONSTRAINT rhn_package_srcrpmid_fk
                              REFERENCES rhnSourceRPM (id),
-    checksum_id      NUMERIC NOT NULL
-                         CONSTRAINT rhn_package_chsum_fk
-                             REFERENCES rhnChecksum (id),
     vendor           VARCHAR(64),
     payload_format   VARCHAR(32),
     compat           NUMERIC(1)

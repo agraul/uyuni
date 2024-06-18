@@ -117,6 +117,7 @@ rhnPackageArch                     :: rhnArchType
 rhnPackageDeltaElement             :: rhnPackageDelta rhnTransactionPackage
 rhnPackageEVR                      :: evr_t
 rhnPackageChangeLogRec             :: rhnPackage rhnPackageChangeLogData
+rhnPackageChecksum                 :: rhnPackage rhnChecksum
 rhnPackageConflicts                :: rhnPackage rhnPackageCapability
 rhnPackageFile                     :: rhnChecksum rhnPackage rhnPackageCapability
 rhnPackageKeyAssociation           :: rhnPackageKey rhnPackage
