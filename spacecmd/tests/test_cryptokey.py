@@ -2,7 +2,7 @@
 """
 Test suite for cryptokey.
 """
-from mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 import pytest
 from xmlrpc import client as xmlrpclib
 import spacecmd.cryptokey

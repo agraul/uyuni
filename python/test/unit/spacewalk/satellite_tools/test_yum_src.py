@@ -39,7 +39,7 @@ except:
 
 from collections import namedtuple
 
-from mock import Mock, MagicMock, patch, mock_open
+from unittest.mock import Mock, MagicMock, patch, mock_open
 
 from spacewalk.satellite_tools.repo_plugins import yum_src, ContentPackage
 from spacewalk.satellite_tools.repo_plugins.yum_src import UpdateNotice

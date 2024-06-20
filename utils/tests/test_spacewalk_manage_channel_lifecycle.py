@@ -5,7 +5,7 @@ Tests for spacewalk-manager-channel-lifecycle script.
 import os
 import pytest
 import tempfile
-from mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 from . import helpers
 
 helpers.symlink_source("spacewalk-manage-channel-lifecycle", "smcl")

@@ -10,7 +10,7 @@
 # along with this software; if not, see
 # http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt.
 
-from mock import Mock, patch
+from unittest.mock import Mock, patch
 from queue import Queue
 
 from spacewalk.satellite_tools.download import (

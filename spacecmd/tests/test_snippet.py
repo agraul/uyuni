@@ -2,7 +2,7 @@
 """
 Test suite for snippet source
 """
-from mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open
 from spacecmd import snippet
 from helpers import shell, assert_expect
 import pytest

@@ -2,7 +2,7 @@
 """
 Test suite for custominfo source
 """
-from mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open
 from spacecmd import custominfo
 from helpers import shell, exc2str
 import pytest

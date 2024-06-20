@@ -3,7 +3,7 @@
 Test software channel module.
 """
 
-from mock import Mock, MagicMock, patch
+from unittest.mock import Mock, MagicMock, patch
 import spacecmd.softwarechannel
 from helpers import shell, assert_expect, assert_list_args_expect
 import pytest

@@ -12,7 +12,7 @@
 #
 
 import unittest
-import mock
+import unittest.mock
 
 from spacewalk.common import suseLib
 
