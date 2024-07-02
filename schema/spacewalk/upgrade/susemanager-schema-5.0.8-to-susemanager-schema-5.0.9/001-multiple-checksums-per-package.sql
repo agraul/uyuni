@@ -7,12 +7,16 @@ CREATE TABLE IF NOT EXISTS rhnPackageChecksum(
                         REFERENCES rhnChecksum (id),
     created     TIMESTAMPTZ
                     DEFAULT (current_timestamp) NOT NULL,
-    modified    TIMSTAMPTZ
+    modified    TIMESTAMPTZ
                     DEFAULT (current_timestamp) NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS rhn_pc_pcs_uq
     ON rhnPackageChecksum (package_id, checksum_id);
 
+-- FIXME: Fails with
+-- ERROR:  cannot drop column checksum_id of table rhnpackage because other objects depend on it
+-- DETAIL:  view susepackageexcludingpartofptf depends on column checksum_id of table rhnpackage
+-- view rhnchannelnewestpackageview depends on view susepackageexcludingpartofptf
 ALTER TABLE rhnPackage
     DROP COLUMN IF EXISTS checksum_id;
