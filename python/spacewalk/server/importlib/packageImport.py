@@ -108,12 +108,13 @@ class ChannelPackageSubscription(GenericPackageImport):
                 )
             else:
                 # As nvrea is enabled uniquify based on checksum
+                # FIXME: "checksum_id" is gone
                 nevrao = (
                     package["name_id"],
                     package["evr_id"],
                     package["package_arch_id"],
                     package["org_id"],
-                    package["checksum_id"],
+                    # package["checksum_id"],
                 )
 
             if nevrao not in uniqdict:
@@ -146,6 +147,8 @@ class ChannelPackageSubscription(GenericPackageImport):
             affected_channels = self.backend.subscribeToChannels(
                 self.batch, strict=self._strict_subscription
             )
+            for package in self.batch:
+                self.backend.add_package_checksums(package, self.checksums)
         except:
             self.backend.rollback()
             raise
@@ -476,9 +479,10 @@ class PackageImport(ChannelPackageSubscription):
         else:
             source_rpm = ""
         package["source_rpm_id"] = source_rpm
-        package["checksum_id"] = self.checksums[
-            (package["checksum_type"], package["checksum"])
-        ]
+        # TODO: change this, "checksum_id" is gone now; needs to be done like capabilities
+        # package["checksum_id"] = self.checksums[
+            # (package["checksum_type"], package["checksum"])
+        # ]
 
         # Postprocess the dependency information
         for tag in (
@@ -661,9 +665,6 @@ class SourcePackageImport(Import):
             self._fix_encoding(package["package_group"]).strip()
         ]
         package["source_rpm_id"] = self.sourceRPMs[package["source_rpm"]]
-        package["checksum_id"] = self.checksums[
-            (package["checksum_type"], package["checksum"])
-        ]
         package["sigchecksum_id"] = self.checksums[
             (package["sigchecksum_type"], package["sigchecksum"])
         ]

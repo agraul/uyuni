@@ -17,6 +17,7 @@
 import os
 import sys
 import tempfile
+import textwrap
 
 from uyuni.common.usix import raise_with_tb
 from uyuni.common import rhn_mpm, rhn_deb, rhn_pkg
@@ -245,23 +246,25 @@ def push_package(a_pkg, org_id=None, force=None, channels=[], relative_path=None
         log_debug(3, "Original package", orig_path)
 
         # check included to query for source and binary rpms
-        h_path_sql = """
-            select ps.path path
-                from %s ps,
-                     rhnChecksumView c
-            where
-                c.checksum = :csum
-            and c.checksum_type = :ctype
-            and ps.checksum_id = c.id
-            and (ps.org_id = :org_id or
-                 (ps.org_id is null and :org_id is null)
-                )
-            """
         if a_pkg.header.is_source:
-            h_package_table = "rhnPackageSource"
+            table = "rhnPackageSource"
+            foreign_key = "package_source_id"
         else:
-            h_package_table = "rhnPackage"
-        h_path = rhnSQL.prepare(h_path_sql % h_package_table)
+            table = "rhnPackage"
+            foreign_key = "package_id"
+        h_path_sql = textwrap.dedent(
+            f"""
+            SELECT p.path path
+            FROM {table} p
+            JOIN rhnPackageChecksumView pcsv
+              ON p.id = pcsv.{foreign_key}
+            WHERE pcsv.checksum = :csum
+              AND pcsv.checksum_type = :ctype
+              AND (p.org_id = :org_id or
+                   (p.org_id is null and :org_id is null))
+            """
+        )
+        h_path = rhnSQL.prepare(h_path_sql)
         h_path.execute(ctype=a_pkg.checksum_type, csum=a_pkg.checksum, org_id=org_id)
 
         rs_path = h_path.fetchall_dict()

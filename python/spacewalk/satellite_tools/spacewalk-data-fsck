@@ -80,8 +80,8 @@ def package_query(options, bind_path=False):
     tables = "rhnPackage p"
     if options.checksum or options.nevrao:
         if is_sha256_capable():
-            columns += ", c.checksum, c.checksum_type"
-            tables += " join rhnChecksumView c on p.checksum_id = c.id"
+            columns += ", pcsv.checksum, pcsv.checksum_type"
+            tables += " join rhnPackageChecksumView pcsv on p.id = pcsv.package_id"
         else:
             columns += ", p.md5sum as checksum, 'md5sum' as checksum_type"
     if options.nevrao:

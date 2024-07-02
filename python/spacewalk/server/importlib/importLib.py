@@ -905,9 +905,6 @@ class GenericPackageImport(Import):
 
         package["name_id"], package["evr_id"], package["package_arch_id"] = nevra
         package["nevra_id"] = nevra_dict[nevra]
-        package["checksum_id"] = self.checksums[
-            (package["checksum_type"], package["checksum"])
-        ]
 
 
 # Exceptions

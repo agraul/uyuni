@@ -498,15 +498,15 @@ class Packages(RPC_Base):
 
     _get_pkg_info_query = """
         select
-               c.checksum_type,
-               c.checksum,
+               pcsv.checksum_type,
+               pcsv.checksum,
                p.path path
          from
                rhnPackageEVR pe,
                rhnPackageName pn,
                rhnPackage p,
                rhnPackageArch pa,
-               rhnChecksumView c
+               rhnPackageChecksumView pcsv
          where
                pn.name     = :name
           and  ( pe.epoch  = :pkg_epoch or
@@ -521,7 +521,7 @@ class Packages(RPC_Base):
           and  p.evr_id    = pe.id
           and  p.package_arch_id = pa.id
           and  pa.label    = :pkg_arch
-          and  p.checksum_id = c.id
+          and  p.id = pcsv.package_id
           %s
     """
 
@@ -648,23 +648,22 @@ class Packages(RPC_Base):
         """
 
         log_debug(3)
-
         statement = """
             select
                 ps.path path,
-                c.checksum,
-                c.checksum_type
+                pcsv.checksum,
+                pcsv.checksum_type
             from
                 rhnSourceRpm sr,
                 rhnPackageSource ps,
-                rhnChecksumView c
+                rhnPackageChecksumView pcsv
             where
                  sr.name = :name
              and ps.source_rpm_id = sr.id
              and ( ps.org_id  = :orgid or
                    ( ps.org_id is null and :orgid is null )
                  )
-             and ps.checksum_id = c.id
+             and ps.id = pcsv.package_source_id
              """
         h = rhnSQL.prepare(statement)
         row_list = {}

@@ -39,9 +39,6 @@ CREATE TABLE rhnPackageSource
     vendor         VARCHAR(64) NOT NULL,
     cookie         VARCHAR(128) NOT NULL,
     path           VARCHAR(1000),
-    checksum_id    NUMERIC NOT NULL
-                      CONSTRAINT rhn_pkgsrc_chsum_fk
-                          REFERENCES rhnChecksum (id),
     package_size   NUMERIC NOT NULL,
     last_modified  TIMESTAMPTZ
                        DEFAULT (current_timestamp) NOT NULL,

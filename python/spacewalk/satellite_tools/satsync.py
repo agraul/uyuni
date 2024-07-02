@@ -24,6 +24,7 @@ import os
 import sys
 import stat
 import time
+import textwrap
 import fnmatch
 
 try:
@@ -1130,17 +1131,20 @@ class Syncer:
 
         self._diff_packages()
 
-    _query_compare_packages = """
-        select p.id, c.checksum_type, c.checksum, p.path, p.package_size,
+    _query_compare_packages = textwrap.dedent(
+        """
+        SELECT p.id, pcsv.checksum_type, pcsv.checksum, p.path, p.package_size,
                TO_CHAR(p.last_modified, 'YYYYMMDDHH24MISS') last_modified
-          from rhnPackage p, rhnChecksumView c
-         where p.name_id = lookup_package_name(:name)
-           and p.evr_id = lookup_evr(:epoch, :version, :release, :package_type)
-           and p.package_arch_id = lookup_package_arch(:arch)
-           and (p.org_id = :org_id or
-               (p.org_id is null and :org_id is null))
-           and p.checksum_id = c.id
-    """
+        FROM rhnPackage p
+        JOIN rhnPackageChecksumView pcsv
+          ON p.id = pcsv.package_id
+        WHERE p.name_id = lookup_package_name(:name)
+          AND p.evr_id = lookup_evr(:epoch, :version, :release, :package_type)
+          AND p.package_arch_id = lookup_package_arch(:arch)
+          AND (p.org_id = :org_id OR
+               (p.org_id is null AND :org_id is null))
+        """
+    )
 
     _query_channel_package_type = """
         select at.label from rhnArchType at
@@ -1499,15 +1503,15 @@ class Syncer:
         return missing_sps
 
     _query_compare_source_packages = """
-        select ps.id, c.checksum_type, c.checksum, ps.path, ps.package_size,
+        select ps.id, pcsv.checksum_type, pcsv.checksum, ps.path, ps.package_size,
                TO_CHAR(ps.last_modified, 'YYYYMMDDHH24MISS') last_modified
-          from rhnPackageSource ps, rhnChecksumView c
+          from rhnPackageSource ps, rhnPackageChecksumView pcsv
          where ps.source_rpm_id = lookup_source_name(:package_id)
            and (ps.org_id = :org_id or
                (ps.org_id is null and :org_id is null))
-           and ps.checksum_id = c.id
-           and c.checksum = :checksum
-           and c.checksum_type = :checksum_type
+           and pcsv.package_source_id = ps.id
+           and pcsv.checksum = :checksum
+           and pcsv.checksum_type = :checksum_type
     """
 
     def _diff_source_packages_process(self, chunk, channel_label):

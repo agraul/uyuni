@@ -1157,7 +1157,7 @@ def list_packages_source(channel_id):
                     new_evr["release"],
                     new_evr["epoch"],
                 ]
-            ret.append(new_evr_list)
+                ret.append(new_evr_list)
 
     return ret
 
@@ -1172,24 +1172,22 @@ _query_all_packages_from_channel_checksum = """
         pevr.epoch,
         pa.label arch,
         p.package_size,
-        ct.label as checksum_type,
-        c.checksum
+        pcsv.checksum_type,
+        pcsv.checksum
     from
         rhnChannelPackage cp,
         rhnPackage p,
         rhnPackageName pn,
         rhnPackageEVR pevr,
         rhnPackageArch pa,
-        rhnChecksumType ct,
-        rhnChecksum c
+        rhnPackageChecksumView pcsv
     where
         cp.channel_id = :channel_id
     and cp.package_id = p.id
     and p.name_id = pn.id
     and p.evr_id = pevr.id
     and p.package_arch_id = pa.id
-    and p.checksum_id = c.id
-    and c.checksum_type_id = ct.id
+    and p.id = pcsv.package_id
     order by pn.name, pevr.evr desc, pa.label
     """
 
@@ -1257,18 +1255,16 @@ def list_packages_checksum_sql(channel_id):
             p.name_id,
             p.evr_id,
             p.package_arch_id,
-            ct.label as checksum_type,
-            c.checksum
+            pcsv.checksum_type,
+            pcsv.checksum
           from
             rhnChannelPackage cp,
             rhnPackage p,
-            rhnChecksumType ct,
-            rhnChecksum c
+            rhnPackageChecksumView pcsv
           where
               cp.channel_id = :channel_id
           and cp.package_id = p.id
-          and p.checksum_id = c.id
-          and c.checksum_type_id = ct.id
+          and pcsv.package_id = p.id
         ) full_channel,
         -- Rank the package's arch
         ( select

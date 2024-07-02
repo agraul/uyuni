@@ -229,7 +229,6 @@ class OracleBackend(Backend):
                 "build_host": DBstring(256),
                 "build_time": DBdateTime(),
                 "source_rpm_id": DBint(),
-                "checksum_id": DBint(),
                 "vendor": DBstring(64),
                 "payload_format": DBstring(32),
                 "path": DBstring(1000),
@@ -239,7 +238,7 @@ class OracleBackend(Backend):
                 "header_end": DBint(),
                 "last_modified": DBdateTime(),
             },
-            pk=["org_id", "name_id", "evr_id", "package_arch_id", "checksum_id"],
+            pk=["org_id", "name_id", "evr_id", "package_arch_id"],
             nullable=["org_id"],
             severityHash={
                 "path": 1,
@@ -258,6 +257,15 @@ class OracleBackend(Backend):
                 "channel_id": DBint(),
             },
             pk=["channel_id", "package_id"],
+        ),
+        Table(
+            "rhnPackageChecksum",
+            fields={
+                "package_id": DBint(),
+                "package_source_id": DBint(),
+                "checksum_id": DBint(),
+            },
+            pk=["package_id", "package_source_id", "checksum_id"],
         ),
         Table(
             "rhnErrata",
@@ -488,13 +496,12 @@ class OracleBackend(Backend):
                 "build_time": DBdateTime(),
                 "path": DBstring(1000),
                 "package_size": DBint(),
-                "checksum_id": DBint(),
                 "sigchecksum_id": DBint(),
                 "vendor": DBstring(64),
                 "cookie": DBstring(128),
                 "last_modified": DBdateTime(),
             },
-            pk=["source_rpm_id", "org_id", "sigchecksum_id", "checksum_id"],
+            pk=["source_rpm_id", "org_id", "sigchecksum_id"],
             nullable=["org_id"],
             severityHash={
                 "path": 1,
@@ -744,7 +751,6 @@ class OracleBackend(Backend):
 
 
 class PostgresqlBackend(OracleBackend):
-
     """
     PostgresqlBackend specific implementation. The bulk of the OracleBackend
     is not actually Oracle specific, so we'll re-use as much as we can and just

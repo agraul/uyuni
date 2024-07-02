@@ -104,3 +104,4 @@ suseChannelPackageRetractedStatusView :: rhnChannelPackage rhnChannelErrata rhnE
 suseServerChannelsRetractedPackagesView :: rhnServerChannel rhnChannelErrata rhnErrataPackage
 susePackageExcludingPartOfPtf :: rhnPackageCapability rhnPackageProvides rhnPackage
 suseServerAppStreamHiddenPackagesView :: suseServerAppStreamPackageView
+rhnPackageChecksumView :: rhnChecksumView

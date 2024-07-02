@@ -23,6 +23,7 @@ from datetime import datetime
 # pylint: disable-next=unused-import
 import string
 import sys
+from typing import Dict
 
 from uyuni.common.usix import raise_with_tb
 from uyuni.common import rhn_rpm
@@ -948,7 +949,7 @@ class Backend:
             for type, chksum in list(package["checksums"].items()):
                 package["checksum_type"] = type
                 package["checksum"] = chksum
-                package["checksum_id"] = checksums[(type, chksum)]
+                # REVIEW: is it ok to drop checksum_id here?
                 try:
                     self.__lookupObjectCollection([package], "rhnPackage")
                     not_found = None
@@ -1122,6 +1123,7 @@ class Backend:
             "susePackageProductFile": "package_id",
             "susePackageEula": "package_id",
             "rhnPackageExtraTag": "package_id",
+            # "rhnPackageChecksums": "package_id", # maybe not here?
         }
 
         if (
@@ -1143,6 +1145,7 @@ class Backend:
                 package["header_start"] = -1
                 package["header_end"] = -1
 
+            # TODO: how do I get the checksum ids in here?
             try:
                 self.__processObjectCollection__(
                     [
@@ -2328,7 +2331,7 @@ class Backend:
               JOIN rhnPackageName pn ON p.name_id = pn.id
               JOIN rhnPackageEVR pe ON p.evr_id = pe.id
               JOIN rhnPackageArch pa ON p.package_arch_id = pa.id
-              JOIN rhnChecksumView cv ON p.checksum_id = cv.id
+              JOIN rhnPackageChecksumView pcsv ON p.id = pcsv.package_id
              WHERE pn.name = :name
                AND ( pe.epoch  = :epoch or
                      ( pe.epoch is null and :epoch is null )
@@ -2336,8 +2339,8 @@ class Backend:
                AND pe.version = :version
                AND pe.release = :release
                AND pa.label = :arch
-               AND cv.checksum = :checksum
-               AND cv.checksum_type = :checksum_type
+               AND pcsv.checksum = :checksum
+               AND pcsv.checksum_type = :checksum_type
         """
         )
 
@@ -2588,6 +2591,17 @@ class Backend:
         self.__doInsertTable("rhnChannelPackage", hash)
         # This function returns the channels that were affected
         return affected_channels
+
+    def add_package_checksums(
+        self, package: IncompletePackage, checksums: Dict[tuple, str]
+    ) -> None:
+        # syncLib.log(0, f"Got package: {package}\nchecksums:{checksums}")
+        for chck_type, chck_val in package["checksums"].items():
+            chck_id = checksums[(chck_type, chck_val)]
+            self.__doInsertTable(
+                "rhnPackageChecksum",
+                {"package_id": [package.id], "checksum_id": [chck_id]},
+            )
 
     # pylint: disable-next=dangerous-default-value
     def update_newest_package_cache(self, caller, affected_channels, name_ids=[]):
@@ -3047,6 +3061,8 @@ class Backend:
         if not hash:
             return
         tab = self.tables[table]
+        # what's going on here? Why grab the first key and check its value?
+        # 1. is only one key,value pair used by TableInsert.query()?
         k = list(hash.keys())[0]
         if not hash[k]:
             # Nothing to do
@@ -3293,6 +3309,7 @@ class Backend:
             h.executemany(**params)
 
     def validate_pks(self):
+        # TODO: what's this .pk doing? Can this stay?
         # If nevra is enabled use checksum as primary key
         tbs = self.tables["rhnPackage"]
         if not CFG.ENABLE_NVREA:

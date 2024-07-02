@@ -24,6 +24,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import textwrap
 import traceback
 import json
 from datetime import datetime
@@ -490,7 +491,7 @@ def _compute_checksum_for_package(package: ContentPackage, checksum_types: Set[s
             continue
 
         completed = subprocess.run(
-            f"{checksum_type}sum {package.path}",
+            (f"{checksum_type}sum", package.path),
             stdout=subprocess.PIPE,
             universal_newlines=True,
             check=False,
@@ -500,6 +501,7 @@ def _compute_checksum_for_package(package: ContentPackage, checksum_types: Set[s
             ret.add(checksum_type)
 
     return ret
+
 
 def compute_all_checksums(packages: List[ContentPackage]):
     """Compute different checksums for each package.
@@ -513,7 +515,10 @@ def compute_all_checksums(packages: List[ContentPackage]):
     cursor = rhnSQL.execute(checksum_types_query)
     checksum_types = cursor.fetchall()
     if checksum_types is None:
-       checksum_types = set()
+        checksum_types = set()
+    else:
+        # fetchall() returns tuples of length 1
+        checksum_types = {t[0] for t in checksum_types}
 
     for package in packages:
         successful = _compute_checksum_for_package(package, checksum_types)
@@ -908,20 +913,17 @@ class RepoSync(object):
                 channel_packages = (
                     rhnSQL.fetchall_dict(
                         """
-                    select p.id, ct.label as checksum_type, c.checksum
-                    from rhnChannelPackage cp,
-                         rhnPackage p,
-                         rhnChecksumType ct,
-                         rhnChecksum c
-                    where cp.channel_id = :channel_id
-                      and cp.package_id = p.id
-                      and p.checksum_id = c.id
-                      and c.checksum_type_id = ct.id
+                    SELECT pcsv.package_id, pcsv.checksum_type, pcsv.checksum
+                    FROM rhnChannelPackage cp
+                    JOIN rhnPackageChecksumView pcsv
+                      ON cp.package_id = pcsv.package_id
+                    WHERE cp.channel_id = :channel_id
                     """,
                         channel_id=int(self.channel["id"]),
                     )
                     or []
                 )
+                # TODO: what do I want to do here? My modified query lists "duplicates", that won't work correctly now
                 for package in channel_packages:
                     if (
                         package["checksum_type"],
@@ -1682,7 +1684,7 @@ class RepoSync(object):
 
     def import_package_batch(
         self,
-        to_process: PackageToProcess,
+        to_process: List[PackageToProcess],
         to_disassociate: list,
         is_non_local_repo,
         batch_index,
@@ -1714,6 +1716,7 @@ class RepoSync(object):
                 continue
             import_count += 1
             stage_path = pkg_to_process.package.path
+            pack = pkg_to_process.package
 
             # pylint: disable=W0703
             try:
@@ -2001,25 +2004,21 @@ class RepoSync(object):
         return importLib.IncompletePackage().populate(package)
 
     def disassociate_package(self, checksum_type, checksum):
-        log(
-            3,
-            # pylint: disable-next=consider-using-f-string
-            "Disassociating package with checksum: %s (%s)" % (checksum, checksum_type),
-        )
-        h = rhnSQL.prepare(
+        log(3, f"Disassociating package with checksum: {checksum} ({checksum_type})")
+        cursor = rhnSQL.prepare(
+            textwrap.dedent(
+                """
+                DELETE FROM rhnChannelPackage cp
+                WHERE cp.channel_id = :channel_id
+                  AND cp.package_id IN
+                    (SELECT pcsv.package_id
+                     FROM rhnPackageChecksumView pcsv
+                     WHERE pcsv.checksum = :checksum
+                       AND pcss.checksum_type = :checksum_type)
             """
-            delete from rhnChannelPackage cp
-             where cp.channel_id = :channel_id
-               and cp.package_id in (select p.id
-                                       from rhnPackage p
-                                       join rhnChecksumView c
-                                         on p.checksum_id = c.id
-                                      where c.checksum = :checksum
-                                        and c.checksum_type = :checksum_type
-                                    )
-        """
+            )
         )
-        h.execute(
+        cursor.execute(
             channel_id=int(self.channel["id"]),
             checksum_type=checksum_type,
             checksum=checksum,
@@ -2130,7 +2129,7 @@ class RepoSync(object):
               join rhnpackagename pn on pn.id = p.name_id
               join rhnpackageevr pevr on pevr.id = p.evr_id
               join rhnpackagearch pa on pa.id = p.package_arch_id
-              join rhnchecksumview cv on cv.id = p.checksum_id
+              join rhnpackagechecksumview cv on cv.package_id = ep.package_id
              where ep.errata_id = :eid
         """
         )
@@ -2862,13 +2861,13 @@ class RepoSync(object):
                 SELECT p.id
                   FROM rhnPackage p
                   JOIN rhnPackagename pn ON p.name_id = pn.id
-                  JOIN rhnChecksumView c ON p.checksum_id = c.id
+                  JOIN rhnPackageChecksumView pcsv ON pcsv.package_id = p.id
                   JOIN rhnChannelPackage cp ON p.id = cp.package_id
                  WHERE pn.name = :name
                    AND p.evr_id = LOOKUP_EVR(:epoch, :version, :release, 'rpm')
                    AND p.package_arch_id = LOOKUP_PACKAGE_ARCH(:arch)
                    AND cp.channel_id = :channel_id
-                   AND c.checksum = :pkgid
+                   AND pcsv.checksum = :pkgid
                 """
             )
             query.execute(

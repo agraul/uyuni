@@ -989,17 +989,17 @@ class ShortPackagesDumper(CachedDumper, exportLib.ShortPackagesDumper):
                 (pe.evr).release as release,
                 (pe.evr).epoch as epoch,
                 pa.label as package_arch,
-                c.checksum_type,
-                c.checksum,
+                pcsv.checksum_type,
+                pcsv.checksum,
                 p.package_size,
                 TO_CHAR(p.last_modified, 'YYYYMMDDHH24MISS') as last_modified
             from rhnPackage p, rhnPackageName pn, rhnPackageEVR pe,
-                rhnPackageArch pa, rhnChecksumView c
+                rhnPackageArch pa, rhnPackageChecksumView pcsv
             where p.id = :package_id
             and p.name_id = pn.id
             and p.evr_id = pe.id
             and p.package_arch_id = pa.id
-            and p.checksum_id = c.id
+            and p.id = pcsv.package_id
         """
     )
     item_id_key = "package_id"
@@ -1029,8 +1029,8 @@ class PackagesDumper(CachedDumper, exportLib.PackagesDumper):
                 p.build_host,
                 TO_CHAR(p.build_time, 'YYYYMMDDHH24MISS') as build_time,
                 sr.name as source_rpm,
-                c.checksum_type,
-                c.checksum,
+                pcsv.checksum_type,
+                pcsv.checksum,
                 p.vendor,
                 p.payload_format,
                 p.compat,
@@ -1042,14 +1042,14 @@ class PackagesDumper(CachedDumper, exportLib.PackagesDumper):
                 TO_CHAR(p.last_modified, 'YYYYMMDDHH24MISS') as last_modified
             from rhnPackage p, rhnPackageName pn, rhnPackageEVR pe,
                 rhnPackageArch pa, rhnPackageGroup pg, rhnSourceRPM sr,
-                rhnChecksumView c
+                rhnPackageChecksumView pcsv
             where p.id = :package_id
             and p.name_id = pn.id
             and p.evr_id = pe.id
             and p.package_arch_id = pa.id
             and p.package_group = pg.id
             and p.source_rpm_id = sr.id
-            and p.checksum_id = c.id
+            and p.id = pcsv.package_id
         """
     )
     item_id_key = "package_id"

@@ -16,6 +16,7 @@
 
 import os
 import sys
+import textwrap
 
 from uyuni.common.usix import ListType
 
@@ -57,7 +58,7 @@ def get_package_path(server_id, pkg_spec, channel):
                 rhnPackageArch pa,
                 rhnChannelPackage cp,
                 rhnPackage p,
-                rhnChecksum cs,
+                rhnPackageChecksumView pcsv,
                 rhnPackageEVR pe,
                 rhnServerChannel sc,
                 rhnPackageName pn,
@@ -76,8 +77,8 @@ def get_package_path(server_id, pkg_spec, channel):
             and p.evr_id = pe.id
             and sc.channel_id = cp.channel_id
             and p.package_arch_id = pa.id
-            and p.checksum_id = cs.id
-            and (:checksum IS NULL OR cs.checksum = :checksum)
+            and p.id = pcsv.package_id
+            and (:checksum IS NULL OR pcsv.checksum = :checksum)
     """
     pkg = list(map(str, pkg))
     h = rhnSQL.prepare(statement)
@@ -247,7 +248,7 @@ def get_info_for_package(pkg, channel_id, org_id):
     # pylint: disable-next=consider-using-f-string
     statement = """
     select p.path, cp.channel_id,
-           cv.checksum_type, cv.checksum, p.org_id, pe.epoch
+           pcsv.checksum_type, pcsv.checksum, p.org_id, pe.epoch
       from rhnPackage p
       join rhnPackageName pn
         on p.name_id = pn.id
@@ -258,8 +259,8 @@ def get_info_for_package(pkg, channel_id, org_id):
       left join rhnChannelPackage cp
         on p.id = cp.package_id
        and cp.channel_id = :channel_id
-      join rhnChecksumView cv
-        on p.checksum_id = cv.id
+      join rhnPackageChecksumView pcsv
+        on p.id = pcsv.package_id
      where pn.name = :name
        and pe.version = :ver
        and pe.release = :rel

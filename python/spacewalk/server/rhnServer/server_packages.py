@@ -522,12 +522,10 @@ def processPackageKeyAssociations(header, checksum_type, checksum):
 
     lookup_pkgid_sql = rhnSQL.prepare(
         """
-        select p.id
-          from rhnPackage p,
-               rhnChecksumView c
-         where c.checksum = :csum
-           and c.checksum_type = :ctype
-           and p.checksum_id = c.id
+        SELECT package_id
+        FROM rhnPackageChecksumView
+        WHERE checksum_type = :ctype
+          AND checksum = :csum
     """
     )
 

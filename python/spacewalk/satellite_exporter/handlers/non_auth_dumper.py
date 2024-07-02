@@ -17,6 +17,7 @@ Non-authenticated dumper
 """
 
 import os
+import textwrap
 
 try:
     #  python 2
@@ -574,27 +575,26 @@ class NonAuthenticatedDumper(rhnHandler, dumper.XML_Dumper):
             raise rhnFault(3007, "Unable to retrieve package %s" % package)
         return self._send_stream(path)
 
-    # This query is similar to the one aove, except that we have already
-    # authorized this channel (so no need for server_id)
     _query_get_package_path_by_nvra_and_checksum = rhnSQL.Statement(
-        """
-            select distinct
-                   p.id, p.path
-              from rhnPackage p,
-                   rhnChannelPackage cp,
-                   rhnChannel c,
-                   rhnPackageArch pa,
-                   rhnChecksum ch
-             where c.label = :channel
-               and cp.channel_id = c.id
-               and cp.package_id = p.id
-               and p.name_id = LOOKUP_PACKAGE_NAME(:name)
-               and p.evr_id = LOOKUP_EVR(:epoch, :version, :release, :package_type)
-               and p.package_arch_id = pa.id
-               and p.checksum_id = ch.id
-               and ch.checksum = :checksum
-               and pa.label = :arch
-    """
+        textwrap.dedent(
+            """
+            SELECT DISTINCT p.id, p.path
+            FROM rhnPackage p
+            JOIN rhnChannelPackage cp
+              ON cp.package_id = p.id
+            JOIN rhnChannel c
+              ON cp.channel_id = c.id
+            JOIN rhnPackageChecksumView pcsv
+              ON pcsv.package_id = p.id
+            JOIN rhnPackageArch pa
+              ON p.package_arch_id = pa.id
+            WHERE c.label = :channel
+              AND p.name_id = LOOKUP_PACKAGE_NAME(:name)
+              AND p.evr_id = LOOKUP_EVR(:epoch, :version, :release, :package_type)
+              AND pcsv.checksum = :checksum
+              AND pa.label = :arch
+            """
+        )
     )
 
     # pylint: disable-next=invalid-name
