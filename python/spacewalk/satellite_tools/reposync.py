@@ -27,6 +27,7 @@ import tempfile
 import traceback
 import json
 from datetime import datetime
+from typing import NamedTuple, Set, List
 from dateutil.parser import parse as parse_date
 from xml.dom import minidom
 import gzip
@@ -67,7 +68,7 @@ from spacewalk.satellite_tools.download import (
     ProgressBarLogger,
     TextLogger,
 )
-from spacewalk.satellite_tools.repo_plugins import CACHE_DIR
+from spacewalk.satellite_tools.repo_plugins import CACHE_DIR, ContentPackage
 from spacewalk.satellite_tools.repo_plugins import yum_src
 from spacewalk.server import taskomatic, rhnPackageUpload
 from spacewalk.satellite_tools.satCerts import verify_certificate_dates
@@ -462,6 +463,63 @@ def get_single_ssl_set(keys, check_dates=False):
     else:
         return keys[0]
     return None
+
+
+class PackageToProcess(NamedTuple):
+    package: ContentPackage
+    download: bool
+    link: bool
+
+
+def _compute_checksum_for_package(package: ContentPackage, checksum_types: Set[str]):
+    """Compute different checksums for a package.
+
+    Args:
+      package: ContentPackage instance. The package must be accessible at the location
+               specified in the path attribute. The checksums attribute is modified in-place.
+
+    Returns:
+        Set of checksum types that were sucessfully computed.
+    """
+    if package.path is None:
+        return checksum_types
+
+    ret = set()
+    for checksum_type in checksum_types:
+        if checksum_type in package.checksums:
+            continue
+
+        completed = subprocess.run(
+            f"{checksum_type}sum {package.path}",
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            package.checksums[checksum_type] = completed.stdout
+            ret.add(checksum_type)
+
+    return ret
+
+def compute_all_checksums(packages: List[ContentPackage]):
+    """Compute different checksums for each package.
+
+    Args:
+      packages: List of ContentPackage instances. The packages need to be
+                accessible at package.path. The package's checksums attribute
+                is modified in-place.
+    """
+    checksum_types_query = "SELECT label FROM rhnchecksumtype;"
+    cursor = rhnSQL.execute(checksum_types_query)
+    checksum_types = cursor.fetchall()
+    if checksum_types is None:
+       checksum_types = set()
+
+    for package in packages:
+        successful = _compute_checksum_for_package(package, checksum_types)
+        failed = checksum_types - successful
+        if failed:
+            print(f"Better error handling, {failed}")
 
 
 # pylint: disable-next=missing-class-docstring
@@ -1347,7 +1405,7 @@ class RepoSync(object):
             )
 
         to_disassociate = {}
-        to_process = []
+        packages_to_process = []
         num_passed = len(packages)
         # pylint: disable-next=consider-using-f-string
         log(0, "Repo URL: %s" % suseLib.URL(url).getURL(stripPw=True))
@@ -1425,9 +1483,9 @@ class RepoSync(object):
             if to_download or to_link:
                 if pack.arch in ["src", "nosrc"]:
                     to_link = False
-                to_process.append((pack, to_download, to_link))
+                packages_to_process.append(PackageToProcess(pack, to_download, to_link))
 
-        num_to_process = len(to_process)
+        num_to_process = len(packages_to_process)
         if num_to_process == 0:
             log(0, "    No new packages to sync.")
             if plug.num_packages == 0:
@@ -1446,21 +1504,20 @@ class RepoSync(object):
 
         downloader = ThreadedDownloader()
         to_download_count = 0
-        for what in to_process:
-            pack, to_download, to_link = what
-            if to_download:
+        for to_process in packages_to_process:
+            if to_process.download:
                 target_file = os.path.join(
                     plug.repo.pkgdir,
-                    pack.checksum,
-                    os.path.basename(pack.unique_id.relativepath),
+                    to_process.package.checksum,
+                    os.path.basename(to_process.package.unique_id.relativepath),
                 )
-                pack.path = target_file
+                to_process.package.path = target_file
                 params = {}
-                checksum_type = pack.checksum_type
-                checksum = pack.checksum
+                checksum_type = to_process.package.checksum_type
+                checksum = to_process.package.checksum
                 plug.set_download_parameters(
                     params,
-                    pack.unique_id.relativepath,
+                    to_process.package.unique_id.relativepath,
                     target_file,
                     checksum_type=checksum_type,
                     checksum_value=checksum,
@@ -1476,21 +1533,24 @@ class RepoSync(object):
         downloader.run()
 
         log(0, "Filtering packages that failed to download")
-        to_process = [
-            i
-            for i in to_process
-            if os.path.basename(i[0].path) not in downloader.failed_pkgs
+        packages_to_process = [
+            p
+            for p in packages_to_process
+            if os.path.basename(p.package.path) not in downloader.failed_pkgs
         ]
+
+        log(2, "Compute all known checksum types")
+        compute_all_checksums([p.package for p in packages_to_process])
 
         log2background(0, "Importing packages started.")
         log(0, "")
         log(0, "  Importing packages to DB:")
 
         twisted_batch_indexes = self.twisted_batch_indexes(
-            len(to_process), self.import_batch_size
+            len(packages_to_process), self.import_batch_size
         )
         to_process_batches = [
-            [to_process[twisted_index] for twisted_index in twisted_batch]
+            [packages_to_process[twisted_index] for twisted_index in twisted_batch]
             for twisted_batch in twisted_batch_indexes
         ]
 
@@ -1523,7 +1583,7 @@ class RepoSync(object):
                 failed_packages += failed_packages_batch
                 self.all_packages.update(all_packages)
                 for j, processed in enumerate(processed_batch):
-                    to_process[twisted_batch_indexes[i][j]] = processed
+                    packages_to_process[twisted_batch_indexes[i][j]] = processed
 
         if affected_channels:
             errataCache.schedule_errata_cache_update(affected_channels)
@@ -1534,7 +1594,7 @@ class RepoSync(object):
             if to_disassociate[(checksum_type, checksum)]:
                 self.disassociate_package(checksum_type, checksum)
         # Do not re-link if nothing was marked to link
-        if any([to_link for (pack, to_download, to_link) in to_process]):
+        if any([to_link for (pack, to_download, to_link) in packages_to_process]):
             log(0, "")
             log(0, "  Linking packages to the channel.")
             # Packages to append to channel
@@ -1542,7 +1602,7 @@ class RepoSync(object):
                 self.chunks(
                     [
                         self.associate_package(pack)
-                        for (pack, to_download, to_link) in to_process
+                        for (pack, to_download, to_link) in packages_to_process
                         if to_link
                     ],
                     1000,
@@ -1621,8 +1681,14 @@ class RepoSync(object):
         return batch_count * element_index + batch_index
 
     def import_package_batch(
-        self, to_process, to_disassociate, is_non_local_repo, batch_index, batch_count
+        self,
+        to_process: PackageToProcess,
+        to_disassociate: list,
+        is_non_local_repo,
+        batch_index,
+        batch_count,
     ):
+        """Import a batch of packages."""
         # Prepare SQL statements
         rhnSQL.closeDB(committing=False, closing=False)
         rhnSQL.initDB()
@@ -1638,18 +1704,16 @@ class RepoSync(object):
         with cfg_component("server.susemanager") as CFG:
             mount_point = CFG.MOUNT_POINT
 
-        to_download_count = sum(p[1] for p in to_process)
+        to_download_count = len([p.download for p in to_process])
         import_count = 0
         failed_packages = 0
         all_packages = set()
 
-        for index, what in enumerate(to_process):
-            # pylint: disable-next=unused-variable
-            pack, to_download, to_link = what
-            if not to_download:
+        for index, pkg_to_process in enumerate(to_process):
+            if not pkg_to_process.download:
                 continue
             import_count += 1
-            stage_path = pack.path
+            stage_path = pkg_to_process.package.path
 
             # pylint: disable=W0703
             try:
