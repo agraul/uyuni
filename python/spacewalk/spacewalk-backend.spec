@@ -576,7 +576,6 @@ fi
 %{_bindir}/mgr-exporter
 %attr(755,root,root) %{_bindir}/spacewalk-debug
 %attr(755,root,root) %{_bindir}/rhn-satellite-exporter
-%attr(755,root,root) %{_bindir}/update-packages
 %attr(755,root,root) %{_bindir}/spacewalk-repo-sync
 %attr(755,root,root) %{_bindir}/rhn-db-stats
 %attr(755,root,root) %{_bindir}/rhn-schema-stats
@@ -604,7 +603,6 @@ fi
 %{python3rhnroot}/satellite_tools/sync_handlers.py*
 %{python3rhnroot}/satellite_tools/rhn_ssl_dbstore.py*
 %{python3rhnroot}/satellite_tools/xmlWireSource.py*
-%{python3rhnroot}/satellite_tools/updatePackages.py*
 %{python3rhnroot}/satellite_tools/reposync.py*
 %{python3rhnroot}/satellite_tools/constants.py*
 %{python3rhnroot}/satellite_tools/download.py*
@@ -655,7 +653,6 @@ fi
 %{_mandir}/man8/spacewalk-repo-sync.8*
 %{_mandir}/man8/spacewalk-data-fsck.8*
 %{_mandir}/man8/spacewalk-update-signatures.8*
-%{_mandir}/man8/update-packages.8*
 %attr(644, root, root) %{_unitdir}/spacewalk-diskcheck.service
 %attr(644, root, root) %{_unitdir}/spacewalk-diskcheck.timer
 
