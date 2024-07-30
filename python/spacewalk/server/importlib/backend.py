@@ -2595,9 +2595,9 @@ class Backend:
     def add_package_checksums(
         self, package: IncompletePackage, checksums: Dict[tuple, str]
     ) -> None:
-        # syncLib.log(0, f"Got package: {package}\nchecksums:{checksums}")
         for chck_type, chck_val in package["checksums"].items():
             chck_id = checksums[(chck_type, chck_val)]
+
             self.__doInsertTable(
                 "rhnPackageChecksum",
                 {"package_id": [package.id], "checksum_id": [chck_id]},
@@ -3309,7 +3309,7 @@ class Backend:
             h.executemany(**params)
 
     def validate_pks(self):
-        # TODO: what's this .pk doing? Can this stay?
+        # TODO: drop this? checksum_id is not there anymore, can't be used as primary key as is
         # If nevra is enabled use checksum as primary key
         tbs = self.tables["rhnPackage"]
         if not CFG.ENABLE_NVREA:

@@ -1074,15 +1074,15 @@ class SourcePackagesDumper(CachedDumper, exportLib.SourcePackagesDumper):
                 ps.vendor,
                 ps.cookie,
                 ps.package_size,
-                c.checksum_type,
-                c.checksum,
+                pcsv.checksum_type,
+                pcsv.checksum,
                 TO_CHAR(ps.last_modified, 'YYYYMMDDHH24MISS') last_modified
             from rhnPackageSource ps, rhnPackageGroup pg, rhnSourceRPM sr,
-                 rhnChecksumView c, rhnChecksumView sig
+                 rhnPackageChecksumView pcsv, rhnChecksumView sig
             where ps.id = :package_id
             and ps.package_group = pg.id
             and ps.source_rpm_id = sr.id
-            and ps.checksum_id = c.id
+            and ps.id = pcsv.package_source_id
             and ps.sigchecksum_id = sig.id
         """
     )

@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS rhnPackageChecksum(
     package_id  NUMERIC CONSTRAINT rhn_pcs_pid_fk
                         REFERENCES rhnPackage (id),
-    package_source_id NUMERIC CONSTRAINT rhn_spcs_pid_fk
+    package_source_id NUMERIC CONSTRAINT rhn_pcs_spid_fk
                         REFERENCES rhnPackageSource (id),
     checksum_id NUMERIC NOT NULL
                     CONSTRAINT rhn_pcs_csid_fk

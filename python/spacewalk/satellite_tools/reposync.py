@@ -1727,6 +1727,7 @@ class RepoSync(object):
 
                 pack.load_checksum_from_header()
 
+                # TODO: call compute_all_checksum here?
                 if not self.metadata_only:
                     rel_package_path = rhnPackageUpload.relative_path_from_header(
                         pack.a_pkg.header,
@@ -3028,16 +3029,15 @@ class RepoSync(object):
             # pylint: disable-next=invalid-name
             orgidStatement = " is NULL"
 
-        h = rhnSQL.prepare(
-            # pylint: disable-next=consider-using-f-string
-            """
-            select p.id, c.checksum, c.checksum_type, pevr.epoch
+        h = rhnSQL.prepare(textwrap.dedent(
+            f"""
+            select p.id, pcsv.checksum, pcsv.checksum_type, pevr.epoch
               from rhnPackage p
               join rhnPackagename pn on p.name_id = pn.id
               join rhnpackageevr pevr on p.evr_id = pevr.id
               join rhnpackagearch pa on p.package_arch_id = pa.id
               join rhnArchType at on pa.arch_type_id = at.id
-              join rhnChecksumView c on p.checksum_id = c.id
+              join rhnPackageChecksumView pcsv on p.id = pcsv.package_id
               join rhnChannelPackage cp on p.id = cp.package_id
              where pn.name = :name
                and p.org_id %s

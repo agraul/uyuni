@@ -479,10 +479,6 @@ class PackageImport(ChannelPackageSubscription):
         else:
             source_rpm = ""
         package["source_rpm_id"] = source_rpm
-        # TODO: change this, "checksum_id" is gone now; needs to be done like capabilities
-        # package["checksum_id"] = self.checksums[
-            # (package["checksum_type"], package["checksum"])
-        # ]
 
         # Postprocess the dependency information
         for tag in (
