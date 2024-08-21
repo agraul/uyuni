@@ -372,7 +372,9 @@ Some more irrelevant data
         assert zdcmp.called
 
         err = str(exc.value)
-        assert err.startswith("Unhandled exception occurred while decompressing Packages.gz:")
+        assert err.startswith(
+            "Unhandled exception during decompressing of pkg index 'Packages.gz':"
+        )
         assert "symlinks" in err
 
     @patch("spacewalk.common.repo.DpkgRepo.get_pkg_index_raw", MagicMock(return_value=("Packages.xz", "content")))
@@ -393,7 +395,9 @@ Some more irrelevant data
         assert xdcmp.called
 
         err = str(exc.value)
-        assert err.startswith("Unhandled exception occurred while decompressing Packages.xz:")
+        assert err.startswith(
+            "Unhandled exception during decompressing of pkg index 'Packages.xz':"
+        )
         assert "Software" in err
 
     @patch("spacewalk.common.repo.DpkgRepo.get_pkg_index_raw", MagicMock(return_value=("Packages.xz", "content")))
@@ -412,7 +416,11 @@ Some more irrelevant data
 
         assert not zdcmp.called
         assert xdcmp.called
-        assert "/dev/null" in str(exc.value)
+        # exc.value is the exception object. The code uses
+        # raise GeneralRepoException from exc
+        # this `from exc` sets the original exception as the
+        # __cause__ of the GeneralRepoException
+        assert "/dev/null" in str(exc.value.__cause__)
 
     @patch("spacewalk.common.repo.DpkgRepo.get_pkg_index_raw", MagicMock(return_value=("Packages.gz", "content")))
     def test_decompress_pkg_index_gz_failure(self):
@@ -430,7 +438,11 @@ Some more irrelevant data
 
         assert not xdcmp.called
         assert zdcmp.called
-        assert "hot" in str(exc.value)
+        # exc.value is the exception object. The code uses
+        # raise GeneralRepoException from exc
+        # this `from exc` sets the original exception as the
+        # __cause__ of the GeneralRepoException
+        assert "hot" in str(exc.value.__cause__)
 
     def test_append_index_file_to_url(self):
         """
@@ -463,4 +475,4 @@ Some more irrelevant data
         with pytest.raises(GeneralRepoException) as exc:
             DpkgRepo(url).append_index_file(DpkgRepo.PKG_GZ)
 
-        assert str(exc.value) == "URL has already Packages.gz mentioned in it."
+        assert str(exc.value) == "URL includes 'Packages.gz' at the wrong place."
