@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import zlib
 from collections import namedtuple
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib import parse
 
 import requests
@@ -26,11 +26,106 @@ LEN_SHA256 = 256 // 4
 LEN_SHA384 = 384 // 4
 LEN_SHA512 = 512 // 4
 
+logger = logging.getLogger(__name__)
+
+
+class EpochVersionRelease:
+    def __init__(
+        self,
+        epoch: Optional[str] = None,
+        version: Optional[str] = None,
+        release: Optional[str] = None,
+        *,
+        evr_str: Optional[str] = None,
+    ):
+        if all(x is not None for x in (epoch, version, release)):
+            self.epoch = epoch
+            self.version = version
+            self.release = release
+        elif evr_str is not None:
+            self.epoch, self.version, self.release = self._parse_evr_str(evr_str)
+        else:
+            raise ValueError(
+                "Either all of epoch, version, release, or an evr_str must to be provided."
+            )
+
+    def _parse_evr_str(self, evr_str):
+        if not evr_str:
+            return "", "", ""
+
+        epoch, _, version_release = evr_str.rpartition(":")
+        version, _, release = version_release.partition("-")
+        return epoch, version, release
+
+    def astuple(self):
+        return (self.epoch, self.version, self.release)
+
+    def __eq__(self, other):
+        return self.astuple() == other.astuple()
+
+    def __str__(self):
+        # assums self.version is always set, self.epoch & self.release are optional
+        epoch_str = release_str = ""
+        if self.epoch:
+            epoch_str = f"{self.epoch}:"
+        if self.release:
+            release_str = f"-{self.release}"
+
+        return f"{epoch_str}{self.version}{release_str}"
+
 
 class GeneralRepoException(Exception):
     """
     Dpkg repository exception
     """
+
+
+class DebPackage:
+    """Representation of a single deb package."""
+
+    def __init__(self):
+        self.name: Optional[str] = None
+        self.epoch: Optional[str] = None
+        self.version: Optional[str] = None
+        self.release: Optional[str] = None
+        self.arch: Optional[str] = None
+        self.relativepath: Optional[str] = None
+        self.checksum_type: Optional[str] = None
+        self.checksum: Optional[str] = None
+
+    # dict-like access
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        return setattr(self, key, value)
+
+    def __repr__(self):
+        return f"DebPackage(name={self.name}, evr={self.evr()}, arch={self.arch}"
+
+    def evr(self):
+        "Return the epoch:version-release string."
+        # evr might have changed since the last time this was called
+        evr = EpochVersionRelease(self.epoch, self.version, self.release)
+        return str(evr)
+
+    def is_populated(self) -> bool:
+        "Return whether all fields were set."
+        return all(
+            [
+                attribute is not None
+                for attribute in (
+                    self.name,
+                    self.epoch,
+                    self.version,
+                    self.release,
+                    self.arch,
+                    self.relativepath,
+                    self.checksum_type,
+                    self.checksum,
+                )
+            ]
+        )
 
 
 class DpkgRepo:
@@ -592,3 +687,46 @@ class DpkgRepo:
                 continue
 
         return result
+
+    def parse_packages(self) -> List[DebPackage]:
+        """Parse "Packages" entries into DebPackages."""
+        ret = []
+        for raw_package in self.decompress_packages_index().split("\n\n"):
+            try:
+                ret.append(self._parse_single_package(raw_package=raw_package))
+            except ValueError:
+                logger.warning("Could not parse package: %s", raw_package)
+        return ret
+
+    def _parse_single_package(self, raw_package: str) -> DebPackage:
+        """Parse a single "Packages" entry into a DebPackage."""
+        package = DebPackage()
+        checksums = {}
+        for line in raw_package.split("\n"):
+            key, value = tuple(word.strip() for word in line.split(" ", 1))
+            if key == "Package:":
+                package.name = value
+            elif key == "Architecture:":
+                package.arch = value + "-deb"
+            elif key == "Version:":
+                package.epoch, package.version, package.release = EpochVersionRelease(
+                    evr_str=value
+                ).astuple()
+            elif key == "Filename:":
+                package.relativepath = value
+            elif key == "SHA256:":
+                checksums["sha256"] = value
+            elif key == "SHA1:":
+                checksums["sha1"] = value
+            elif key == "MD5:":
+                checksums["md5"] = value
+
+        # pick best checksum
+        for checksum_type in ("sha256", "sha1", "md5"):
+            if checksum_type in checksums:
+                package.checksum_type = checksum_type
+                package.checksum = checksums[checksum_type]
+
+        if not package.is_populated():
+            raise ValueError("Package is not complete: %s", package)
+        return package

@@ -8,7 +8,7 @@ import zlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-from spacewalk.common.repo import DpkgRepo, GeneralRepoException
+from spacewalk.common.repo import EpochVersionRelease, DpkgRepo, GeneralRepoException
 
 
 class FakeRequests:
@@ -441,10 +441,10 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
-            out = DpkgRepo("http://dummy_url").decompress_pkg_index()
+            out = DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not xdcmp.called
         assert zdcmp.called
@@ -466,10 +466,10 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
-            out = DpkgRepo("http://dummy_url").decompress_pkg_index()
+            out = DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not zdcmp.called
         assert xdcmp.called
@@ -492,11 +492,11 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
             with pytest.raises(GeneralRepoException) as exc:
-                DpkgRepo("http://dummy_url").decompress_pkg_index()
+                DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not xdcmp.called
         assert zdcmp.called
@@ -524,11 +524,11 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
             with pytest.raises(GeneralRepoException) as exc:
-                DpkgRepo("http://dummy_url").decompress_pkg_index()
+                DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not zdcmp.called
         assert xdcmp.called
@@ -556,11 +556,11 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
             with pytest.raises(GeneralRepoException) as exc:
-                DpkgRepo("http://dummy_url").decompress_pkg_index()
+                DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not zdcmp.called
         assert xdcmp.called
@@ -581,11 +581,11 @@ Some more irrelevant data
         # pylint: disable-next=unused-variable
         with patch("spacewalk.common.repo.zlib.decompress", zdcmp) as m_zlib, patch(
             "spacewalk.common.repo.lzma.decompress",
-            xdcmp
+            xdcmp,
             # pylint: disable-next=unused-variable
         ) as m_lzma:
             with pytest.raises(GeneralRepoException) as exc:
-                DpkgRepo("http://dummy_url").decompress_pkg_index()
+                DpkgRepo("http://dummy_url").decompress_packages_index()
 
         assert not xdcmp.called
         assert zdcmp.called
@@ -627,3 +627,28 @@ Some more irrelevant data
             DpkgRepo(url).append_index_file(DpkgRepo.PKG_GZ)
 
         assert str(exc.value) == "URL has already Packages.gz mentioned in it."
+
+
+def test_evr_str_parser():
+    evr_strs = [
+        "0.0.26-3",
+        "4.5-1.1",
+        "20230208+ds1-1",
+        "1:1.0.2-5",
+        "0.0~b1-1+b2",
+        "1:0.97~svn20211115+ds-1+b1",
+        "3.134",
+    ]
+    expected_evrs = [
+        EpochVersionRelease("", "0.0.26", "3"),
+        EpochVersionRelease("", "4.5", "1.1"),
+        EpochVersionRelease("", "20230208+ds1", "1"),
+        EpochVersionRelease("1", "1.0.2", "5"),
+        EpochVersionRelease("", "0.0~b1", "1+b2"),
+        EpochVersionRelease("1", "0.97~svn20211115+ds", "1+b1"),
+        EpochVersionRelease("", "3.134", ""),
+    ]
+    for evr_str, expected in zip(evr_strs, expected_evrs):
+        got = EpochVersionRelease(evr_str=evr_str)
+        print(f"want={expected.astuple()} got={got.astuple()}")
+        assert got == expected

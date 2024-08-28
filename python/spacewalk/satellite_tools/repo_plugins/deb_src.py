@@ -50,55 +50,6 @@ log = logging.getLogger(__name__)
 
 
 # pylint: disable-next=missing-class-docstring
-class DebPackage:
-    def __init__(self):
-        self.name = None
-        self.epoch = None
-        self.version = None
-        self.release = None
-        self.arch = None
-        self.relativepath = None
-        self.checksum_type = None
-        self.checksum = None
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-
-    def __setitem__(self, key, value):
-        return setattr(self, key, value)
-
-    def evr(self):
-        evr = ""
-        if self.epoch:
-            # pylint: disable-next=consider-using-f-string
-            evr = evr + "{}:".format(self.epoch)
-        if self.version:
-            # pylint: disable-next=consider-using-f-string
-            evr = evr + "{}".format(self.version)
-        if self.release:
-            # pylint: disable-next=consider-using-f-string
-            evr = evr + "-{}".format(self.release)
-        return evr
-
-    def is_populated(self):
-        return all(
-            [
-                attribute is not None
-                for attribute in (
-                    self.name,
-                    self.epoch,
-                    self.version,
-                    self.release,
-                    self.arch,
-                    self.relativepath,
-                    self.checksum_type,
-                    self.checksum,
-                )
-            ]
-        )
-
-
-# pylint: disable-next=missing-class-docstring
 class DebRepo:
     # url example - http://ftp.debian.org/debian/dists/jessie/main/binary-amd64/
     def __init__(
@@ -205,6 +156,9 @@ class DebRepo:
         self.exclude = []
         self.pkgdir = pkg_dir
         self.http_headers = {}
+        self.dpkg_repo = repo.DpkgRepo(
+            self.url, self._get_proxies(), self.gpg_verify, self.timeout
+        )
 
     def verify(self):
         """
@@ -212,9 +166,7 @@ class DebRepo:
 
         :return:
         """
-        if not repo.DpkgRepo(
-            self.url, self._get_proxies(), self.gpg_verify, self.timeout
-        ).verify_packages_index():
+        if not self.dpkg_repo.verify_packages_index():
             raise repo.GeneralRepoException("Package index checksum failure")
 
     def _get_proxies(self):
@@ -280,87 +232,7 @@ class DebRepo:
         return ""
 
     def get_package_list(self):
-        decompressed = None
-        packages_raw = []
-        to_return = []
-
-        for extension in FORMAT_PRIORITY:
-            scheme, netloc, path, query, fragid = urlparse.urlsplit(self.url)
-            url = urlparse.urlunsplit(
-                (
-                    scheme,
-                    netloc,
-                    path
-                    + ("/" if not path.endswith("/") else "")
-                    + "Packages"
-                    + extension,
-                    query,
-                    fragid,
-                )
-            )
-            filename = self._download(url)
-            if filename:
-                if query:
-                    newfilename = filename.split("?")[0]
-                    os.rename(filename, newfilename)
-                    filename = newfilename
-                decompressed = fileutils.decompress_open(filename)
-                break
-
-        if decompressed:
-            for pkg in decompressed.read().split("\n\n"):
-                packages_raw.append(pkg)
-            decompressed.close()
-        else:
-            print("ERROR: Download of package list failed.")
-
-        # Parse and format package metadata
-        for chunk in packages_raw:
-            package = DebPackage()
-            package.epoch = ""
-            lines = chunk.split("\n")
-            checksums = {}
-            for line in lines:
-                pair = tuple(p.strip() for p in line.split(" ", 1))
-                if pair[0] == "Package:":
-                    package.name = pair[1]
-                elif pair[0] == "Architecture:":
-                    package.arch = pair[1] + "-deb"
-                elif pair[0] == "Version:":
-                    package["epoch"] = ""
-                    version = pair[1]
-                    if version.find(":") != -1:
-                        package["epoch"], version = version.split(":")
-                    if version.find("-") != -1:
-                        tmp = version.split("-")
-                        package["version"] = "-".join(tmp[:-1])
-                        package["release"] = tmp[-1]
-                    else:
-                        package["version"] = version
-                        package["release"] = "X"
-                elif pair[0] == "Filename:":
-                    package.relativepath = pair[1]
-                elif pair[0] == "SHA256:":
-                    checksums["sha256"] = pair[1]
-                elif pair[0] == "SHA1:":
-                    checksums["sha1"] = pair[1]
-                elif pair[0] == "MD5sum:":
-                    checksums["md5"] = pair[1]
-
-            # Pick best available checksum
-            if "sha256" in checksums:
-                package.checksum_type = "sha256"
-                package.checksum = checksums["sha256"]
-            elif "sha1" in checksums:
-                package.checksum_type = "sha1"
-                package.checksum = checksums["sha1"]
-            elif "md5" in checksums:
-                package.checksum_type = "md5"
-                package.checksum = checksums["md5"]
-
-            if package.is_populated():
-                to_return.append(package)
-        return to_return
+        return self.dpkg_repo.parse_packages()
 
 
 # pylint: disable-next=missing-class-docstring
