@@ -2,18 +2,17 @@
 Repository tools
 """
 
-# coding: utf-8
-import typing
-import http
-import os
-import zlib
-import lzma
-import logging
-import tempfile
-import subprocess
-from urllib import parse
 import hashlib
+import http
+import logging
+import lzma
+import os
+import subprocess
+import tempfile
+import zlib
 from collections import namedtuple
+from typing import Any, Dict, Optional, Tuple
+from urllib import parse
 
 import requests
 
@@ -75,7 +74,7 @@ class DpkgRepo:
             super().__init__()
             self.__repo = repo
 
-        def get(self, key: typing.Any) -> typing.Optional[typing.Any]:  # type: ignore
+        def get(self, key: Any) -> Optional[Any]:
             """
             Automatically update key if the repo is flat.
 
@@ -92,14 +91,14 @@ class DpkgRepo:
     def __init__(
         self,
         url: str,
-        proxies: dict = None,
+        proxies: Optional[dict] = None,
         gpg_verify: bool = True,
-        timeout: typing.Optional[int] = None,
+        timeout: Optional[int] = None,
     ):
         self.url = url
-        self._flat_checked: typing.Optional[int] = None
+        self._flat_checked: Optional[int] = None
         self._flat: bool = False
-        self._pkg_index: typing.Tuple[str, bytes] = (
+        self._pkg_index: Tuple[str, bytes] = (
             "",
             b"",
         )
@@ -107,6 +106,30 @@ class DpkgRepo:
         self.proxies = proxies
         self.gpg_verify = gpg_verify
         self.timeout = timeout
+
+    @staticmethod
+    def _get_parent_url(url, depth=1, add_path=""):
+        """
+        Get parent url from the given one.
+
+        :param url: an url
+        :return: parent url
+        """
+        p_url = parse.urlparse(url)
+        p_path = p_url.path.rstrip("/").split("/")
+        if depth:
+            p_path = p_path[:-depth]
+
+        return parse.urlunparse(
+            parse.ParseResult(
+                scheme=p_url.scheme,
+                netloc=p_url.netloc,
+                path="/".join(p_path + add_path.strip("/").split("/")) or "/",
+                params=p_url.params,
+                query=p_url.query,
+                fragment=p_url.fragment,
+            )
+        )
 
     def append_index_file(self, index_file: str) -> str:
         """
@@ -141,68 +164,18 @@ class DpkgRepo:
             )
         )
 
-    def get_pkg_index_raw(self) -> typing.Tuple[str, bytes]:
+    def is_flat(self) -> bool:
         """
-        Get Packages.gz or Packages.xz or Packages content, raw.
+        Detect if the repository has flat format.
 
-        :return: bytes of the content
+        :return:
         """
-        if self._pkg_index[0] == "":
-            for cnt_fname in [DpkgRepo.PKG_GZ, DpkgRepo.PKG_XZ, DpkgRepo.PKG_RW]:
-                packages_url = self.append_index_file(cnt_fname)
-                if packages_url.startswith("file://"):
-                    try:
-                        with open(packages_url.replace("file://", ""), "rb") as f:
-                            self._pkg_index = cnt_fname, f.read()
-                            break
-                    except FileNotFoundError:
-                        logging.debug(
-                            "File not found: %s",
-                            packages_url.replace("file://", ""),
-                            exc_info=True,
-                        )
-                else:
-                    resp = requests.get(
-                        packages_url,
-                        proxies=self.proxies,
-                        timeout=self.timeout,
-                    )
-                    if resp.status_code == http.HTTPStatus.OK:
-                        self._pkg_index = cnt_fname, resp.content
-                        break
-                    resp.close()
+        if self._flat_checked is None:
+            self.get_release_index()
 
-        return self._pkg_index
+        return bool(self._flat)
 
-    def decompress_pkg_index(self) -> str:
-        """
-        Find and return contents of Packages.gz file.
-
-        :raises GeneralRepoException if the Packages.gz file cannot be found.
-        :return: string
-        """
-        fname, cnt_data = self.get_pkg_index_raw()
-        try:
-            if fname == DpkgRepo.PKG_GZ:
-                cnt_data = zlib.decompress(cnt_data, 0x10 + zlib.MAX_WBITS)
-            elif fname == DpkgRepo.PKG_XZ:
-                cnt_data = lzma.decompress(cnt_data)
-        except (zlib.error, lzma.LZMAError) as exc:
-            logging.exception(
-                "Exception during decompression of pkg index", exc_info=True
-            )
-            raise GeneralRepoException(exc) from exc
-        except Exception as exc:
-            logging.exception(
-                "Unknown exception during decompression of \
-                               pkg index. Raising GeneralRepoException",
-                exc_info=True,
-            )
-            raise GeneralRepoException(
-                f"Unhandled exception occurred while decompressing {fname}: {exc}"
-            ) from exc
-
-        return cnt_data.decode("utf-8")
+    # "Release" file parsing and verification
 
     def _parse_release_index(self, release: str) -> "EntryDict":
         """
@@ -346,7 +319,7 @@ class DpkgRepo:
             )
             return False
 
-    def get_release_index(self) -> typing.Dict[str, "DpkgRepo.ReleaseEntry"]:
+    def get_release_index(self) -> Dict[str, "DpkgRepo.ReleaseEntry"]:
         """
         Find and return contents of Release file.
 
@@ -362,7 +335,7 @@ class DpkgRepo:
         else:
             return self._get_release_index_from_http()
 
-    def _get_release_index_from_file(self) -> typing.Dict[str, "DpkgRepo.ReleaseEntry"]:
+    def _get_release_index_from_file(self) -> Dict[str, "DpkgRepo.ReleaseEntry"]:
         # InRelease files take precedence per uyuni-rfc 00057-deb-repo-sync-gpg-check
         logging.debug(
             "Fetching release file from local filesystem: %s",
@@ -446,7 +419,7 @@ class DpkgRepo:
 
         return self._release
 
-    def _get_release_index_from_http(self) -> typing.Dict[str, "DpkgRepo.ReleaseEntry"]:
+    def _get_release_index_from_http(self) -> Dict[str, "DpkgRepo.ReleaseEntry"]:
         # InRelease files take precedence per uyuni-rfc 00057-deb-repo-sync-gpg-check
         logging.debug("Fetching release file from local http: %s", self.url)
         resp = requests.get(
@@ -525,40 +498,70 @@ class DpkgRepo:
 
         return self._release
 
-    @staticmethod
-    def _get_parent_url(url, depth=1, add_path=""):
-        """
-        Get parent url from the given one.
+    # "Packages" file parsing and verification
 
-        :param url: an url
-        :return: parent url
+    def get_packages_index_raw(self) -> Tuple[str, bytes]:
         """
-        p_url = parse.urlparse(url)
-        p_path = p_url.path.rstrip("/").split("/")
-        if depth:
-            p_path = p_path[:-depth]
+        Get Packages.gz or Packages.xz or Packages content, raw.
 
-        return parse.urlunparse(
-            parse.ParseResult(
-                scheme=p_url.scheme,
-                netloc=p_url.netloc,
-                path="/".join(p_path + add_path.strip("/").split("/")) or "/",
-                params=p_url.params,
-                query=p_url.query,
-                fragment=p_url.fragment,
+        :return: bytes of the content
+        """
+        if self._pkg_index[0] == "":
+            for cnt_fname in [DpkgRepo.PKG_GZ, DpkgRepo.PKG_XZ, DpkgRepo.PKG_RW]:
+                packages_url = self.append_index_file(cnt_fname)
+                if packages_url.startswith("file://"):
+                    try:
+                        with open(packages_url.replace("file://", ""), "rb") as f:
+                            self._pkg_index = cnt_fname, f.read()
+                            break
+                    except FileNotFoundError:
+                        logging.debug(
+                            "File not found: %s",
+                            packages_url.replace("file://", ""),
+                            exc_info=True,
+                        )
+                else:
+                    resp = requests.get(
+                        packages_url,
+                        proxies=self.proxies,
+                        timeout=self.timeout,
+                    )
+                    if resp.status_code == http.HTTPStatus.OK:
+                        self._pkg_index = cnt_fname, resp.content
+                        break
+                    resp.close()
+
+        return self._pkg_index
+
+    def decompress_packages_index(self) -> str:
+        """
+        Find and return contents of Packages.gz file.
+
+        :raises GeneralRepoException if the Packages.gz file cannot be found.
+        :return: string
+        """
+        fname, cnt_data = self.get_packages_index_raw()
+        try:
+            if fname == DpkgRepo.PKG_GZ:
+                cnt_data = zlib.decompress(cnt_data, 0x10 + zlib.MAX_WBITS)
+            elif fname == DpkgRepo.PKG_XZ:
+                cnt_data = lzma.decompress(cnt_data)
+        except (zlib.error, lzma.LZMAError) as exc:
+            logging.exception(
+                "Exception during decompression of pkg index", exc_info=True
             )
-        )
+            raise GeneralRepoException(exc) from exc
+        except Exception as exc:
+            logging.exception(
+                "Unknown exception during decompression of \
+                               pkg index. Raising GeneralRepoException",
+                exc_info=True,
+            )
+            raise GeneralRepoException(
+                f"Unhandled exception occurred while decompressing {fname}: {exc}"
+            ) from exc
 
-    def is_flat(self) -> bool:
-        """
-        Detect if the repository has flat format.
-
-        :return:
-        """
-        if self._flat_checked is None:
-            self.get_release_index()
-
-        return bool(self._flat)
+        return cnt_data.decode("utf-8")
 
     def verify_packages_index(self) -> bool:
         """
@@ -566,7 +569,7 @@ class DpkgRepo:
 
         :return: result (boolean)
         """
-        name, data = self.get_pkg_index_raw()
+        name, data = self.get_packages_index_raw()
 
         # If there are no packages in the repo, return True
         if (name, data) == (
