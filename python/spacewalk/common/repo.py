@@ -11,10 +11,12 @@ import subprocess
 import tempfile
 import zlib
 from collections import namedtuple
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 from urllib import parse
 
 import requests
+from spacewalk.common import fileutils
+from spacewalk.common.rhnConfig import cfg_component
 
 SPACEWALK_LIB = "/var/lib/spacewalk"
 SPACEWALK_GPG_HOMEDIR = os.path.join(SPACEWALK_LIB, "gpgdir")
@@ -55,6 +57,11 @@ class EpochVersionRelease:
 
         epoch, _, version_release = evr_str.rpartition(":")
         version, _, release = version_release.partition("-")
+        # HACK: this is for backwards-compatibility introduced by
+        # https://github.com/uyuni-project/uyuni/commit/fb7be313d1737316390b5a445c9c225680caa757
+        # ContentPackage.setNVREA() currently does not allow unset release
+        if not release:
+            release = "X"
         return epoch, version, release
 
     def astuple(self):
@@ -92,6 +99,7 @@ class DebPackage:
         self.relativepath: Optional[str] = None
         self.checksum_type: Optional[str] = None
         self.checksum: Optional[str] = None
+        self.description: Optional[str] = None
 
     # dict-like access
     def __getitem__(self, key):
@@ -110,7 +118,10 @@ class DebPackage:
         return str(evr)
 
     def is_populated(self) -> bool:
-        "Return whether all fields were set."
+        """Return whether all fields were set.
+
+        The only exception is "description", which is not always avaliable.
+        """
         return all(
             [
                 attribute is not None
@@ -186,6 +197,7 @@ class DpkgRepo:
     def __init__(
         self,
         url: str,
+        cachedir: str,
         proxies: Optional[dict] = None,
         gpg_verify: bool = True,
         timeout: Optional[int] = None,
@@ -197,6 +209,8 @@ class DpkgRepo:
             "",
             b"",
         )
+        self.cachedir = cachedir
+        self.description_cachedir = os.path.join(self.cachedir, "descriptions/")
         self._release = DpkgRepo.EntryDict(self)
         self.proxies = proxies
         self.gpg_verify = gpg_verify
@@ -689,14 +703,29 @@ class DpkgRepo:
         return result
 
     def parse_packages(self) -> List[DebPackage]:
-        """Parse "Packages" entries into DebPackages."""
+        """Parse "Packages" entries into DebPackages.
+
+        Returns:
+          A list of DebPackage objects.
+        """
         ret = []
+        self.cache_descriptions()
         for raw_package in self.decompress_packages_index().split("\n\n"):
             try:
                 ret.append(self._parse_single_package(raw_package=raw_package))
             except ValueError:
                 logger.warning("Could not parse package: %s", raw_package)
+        logger.debug("Parsed packages: %s", ret)
         return ret
+
+    def parse_packages_lazy(self) -> Generator[DebPackage, None, None]:
+        """Parse "Packages" entries into DebPackages.
+
+        Returns:
+          A generator object that yields DebPackage objects.
+        """
+        for raw_package in self.decompress_packages_index().split("\n\n"):
+            yield self._parse_single_package(raw_package=raw_package)
 
     def _parse_single_package(self, raw_package: str) -> DebPackage:
         """Parse a single "Packages" entry into a DebPackage."""
@@ -720,13 +749,121 @@ class DpkgRepo:
                 checksums["sha1"] = value
             elif key == "MD5:":
                 checksums["md5"] = value
+            elif key == "Description-md5:":
+                package.description = self.read_package_description(value)
 
         # pick best checksum
         for checksum_type in ("sha256", "sha1", "md5"):
             if checksum_type in checksums:
                 package.checksum_type = checksum_type
                 package.checksum = checksums[checksum_type]
-
         if not package.is_populated():
             raise ValueError("Package is not complete: %s", package)
         return package
+
+    def get_translation_file_raw(self) -> Tuple[str, bytes]:
+        """Read an English translation file for this repo.
+
+        Returns:
+          Tuple of file name (str) and file contents (bytes)
+        """
+        # translation file is located in sibling directory self.url/../i18n/
+        # our URL is not to the root, it's to e.g. $root/main/binary-amd64
+        # FIXME: pull path from self._release (relative to release file)
+        translations_raw = "", b""
+        for fname in ["Translation-en.xz", "Translation-en.gz", "Translation-en"]:
+            url = self._get_parent_url(self.url, depth=1, add_path=f"i18n/{fname}")
+            if url.startswith("file://"):
+                try:
+                    with open(url.replace("file://", ""), "rb") as f:
+                        translations_raw = fname, f.read()
+                        break
+                except FileNotFoundError:
+                    logging.debug("File not found: %s", url.replace("file://", ""))
+            else:
+                with requests.get(
+                    url, proxies=self.proxies, timeout=self.timeout
+                ) as resp:
+                    if resp.status_code == http.HTTPStatus.OK:
+                        translations_raw = fname, resp.content
+                        break
+        logger.debug(
+            "translations_raw fname=%s, content length=%i",
+            translations_raw[0],
+            len(translations_raw[1]),
+        )
+        return translations_raw
+
+    def decompress_translation_file(self) -> str:
+        """Decompress a raw translation file.
+
+        Raises:
+            GeneralRepoException on decompression and other errors.
+        """
+        # FIXME: this is 99% the same as decompress pkg index-> can we combine?
+        fname, data = self.get_translation_file_raw()
+        if not data:
+            return ""
+
+        try:
+            if fname.endswith(".gz"):
+                decompressed = zlib.decompress(data, 0x10 + zlib.MAX_WBITS)
+            elif fname.endswith(".xz"):
+                decompressed = lzma.decompress(data)
+            else:
+                decompressed = data
+        except (zlib.error, lzma.LZMAError) as e:
+            logging.exception("Error decompressing file %", fname, exc_info=True)
+            raise GeneralRepoException from e
+        except Exception as e:
+            raise GeneralRepoException from e
+        return decompressed.decode("utf-8")
+
+    def cache_descriptions(self):
+        """Store package descriptions in cache.
+
+        The cache-key is the "Description-md5" as specified in "Packages" file.
+        """
+        if not os.path.isdir(self.description_cachedir):
+            with cfg_component(component=None) as cfg:
+                fileutils.makedirs(
+                    self.description_cachedir,
+                    user=cfg.get("httpd_user"),
+                    group=cfg.get("http_group"),
+                )
+        for chunk in self.decompress_translation_file().split("\n\n"):
+            if not chunk:
+                continue
+            md5, description = self._parse_translation_chunk(chunk)
+            description_file = os.path.join(self.description_cachedir, md5)
+            with open(description_file, "w", encoding="utf-8") as f:
+                f.write(description)
+
+    def _parse_translation_chunk(self, chunk: str) -> Tuple[str, str]:
+        """Parse a description chunk into a tuple.
+
+        Returns:
+          A tuple:  (description-md5, description)
+        """
+        md5 = ""
+        description = []
+        for line in chunk.splitlines():
+            if line.startswith("Package:"):
+                continue
+            elif line.startswith("Description-md5:"):
+                md5 = line.split(" ")[-1]
+            elif line.startswith("Description-en:"):
+                description.append(line.split(" ", maxsplit=1)[-1])
+            elif line.startswith(" "):
+                description.append(line)
+
+        return md5, "\n".join(description)
+
+    def read_package_description(self, md5) -> str:
+        """Read a package description from cache."""
+        description_file = os.path.join(self.description_cachedir, md5)
+        desc = ""
+        if os.path.exists(description_file):
+            with open(description_file, "r", encoding="utf-8") as f:
+                desc = f.read()
+        return desc

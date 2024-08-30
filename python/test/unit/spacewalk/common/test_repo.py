@@ -58,7 +58,7 @@ class TestCommonRepo:
     """
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", b"\x00")),
     )
     @patch("spacewalk.common.repo.DpkgRepo.is_flat", MagicMock(return_value=False))
@@ -84,7 +84,7 @@ class TestCommonRepo:
             assert repo.verify_packages_index()
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", b"\x00")),
     )
     @patch("spacewalk.common.repo.DpkgRepo.is_flat", MagicMock(return_value=False))
@@ -108,7 +108,7 @@ class TestCommonRepo:
             assert repo.verify_packages_index()
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", b"\x00")),
     )
     @patch("spacewalk.common.repo.DpkgRepo.is_flat", MagicMock(return_value=False))
@@ -134,7 +134,7 @@ class TestCommonRepo:
             assert repo.verify_packages_index()
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", b"\x00")),
     )
     @patch("spacewalk.common.repo.DpkgRepo.is_flat", MagicMock(return_value=False))
@@ -426,10 +426,10 @@ Some more irrelevant data
         assert parsed["two/Release.gz"].size == 1298
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", "content")),
     )
-    def test_decompress_pkg_index_gz(self):
+    def test_decompress_packages_index_gz(self):
         """
         Test decompression for Packages.gz file.
 
@@ -451,10 +451,10 @@ Some more irrelevant data
         assert out == "макарони"
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.xz", "content")),
     )
-    def test_decompress_pkg_index_xz(self):
+    def test_decompress_packages_index_xz(self):
         """
         Test decompression for Packages.xz file.
 
@@ -476,10 +476,10 @@ Some more irrelevant data
         assert out == "макарони"
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", "content")),
     )
-    def test_decompress_pkg_index_gz_general_failure(self):
+    def test_decompress_packages_index_gz_general_failure(self):
         """
         Test decompression for Packages.gz file general failure handling.
 
@@ -508,10 +508,10 @@ Some more irrelevant data
         assert "symlinks" in err
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.xz", "content")),
     )
-    def test_decompress_pkg_index_xz_general_failure(self):
+    def test_decompress_packages_index_xz_general_failure(self):
         """
         Test decompression for Packages.xz file general failure handling.
 
@@ -540,10 +540,10 @@ Some more irrelevant data
         assert "Software" in err
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.xz", "content")),
     )
-    def test_decompress_pkg_index_xz_failure(self):
+    def test_decompress_packages_index_xz_failure(self):
         """
         Test decompression for Packages.xz file failure handling.
 
@@ -567,10 +567,10 @@ Some more irrelevant data
         assert "/dev/null" in str(exc.value)
 
     @patch(
-        "spacewalk.common.repo.DpkgRepo.get_pkg_index_raw",
+        "spacewalk.common.repo.DpkgRepo.get_packages_index_raw",
         MagicMock(return_value=("Packages.gz", "content")),
     )
-    def test_decompress_pkg_index_gz_failure(self):
+    def test_decompress_packages_index_gz_failure(self):
         """
         Test decompression for Packages.gz file failure handling.
 
@@ -646,7 +646,7 @@ def test_evr_str_parser():
         EpochVersionRelease("1", "1.0.2", "5"),
         EpochVersionRelease("", "0.0~b1", "1+b2"),
         EpochVersionRelease("1", "0.97~svn20211115+ds", "1+b1"),
-        EpochVersionRelease("", "3.134", ""),
+        EpochVersionRelease("", "3.134", "X"),
     ]
     for evr_str, expected in zip(evr_strs, expected_evrs):
         got = EpochVersionRelease(evr_str=evr_str)

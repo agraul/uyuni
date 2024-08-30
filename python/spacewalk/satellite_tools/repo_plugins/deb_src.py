@@ -22,15 +22,14 @@ import time
 import re
 import fnmatch
 import requests
-import logging
 from functools import cmp_to_key
 from salt.utils.versions import LooseVersion
 from uyuni.common import fileutils
 from spacewalk.common.suseLib import get_proxy
-from spacewalk.common.rhnConfig import cfg_component
+from uyuni.common.context_managers import cfg_component
 from spacewalk.satellite_tools.download import get_proxies
 from spacewalk.satellite_tools.repo_plugins import ContentPackage, CACHE_DIR
-from spacewalk.satellite_tools.syncLib import log2
+from spacewalk.satellite_tools.syncLib import log, log2
 from spacewalk.server import rhnSQL
 from spacewalk.common import repo
 
@@ -46,7 +45,6 @@ except ImportError:
 RETRIES = 10
 RETRY_DELAY = 1
 FORMAT_PRIORITY = [".xz", ".gz", ""]
-log = logging.getLogger(__name__)
 
 
 # pylint: disable-next=missing-class-docstring
@@ -157,7 +155,11 @@ class DebRepo:
         self.pkgdir = pkg_dir
         self.http_headers = {}
         self.dpkg_repo = repo.DpkgRepo(
-            self.url, self._get_proxies(), self.gpg_verify, self.timeout
+            url=self.url,
+            cachedir=self.basecachedir,
+            proxies=self._get_proxies(),
+            gpg_verify=self.gpg_verify,
+            timeout=self.timeout,
         )
 
     def verify(self):
@@ -287,12 +289,12 @@ class ContentSource:
             # The repository cache root will be "/var/cache/rhn/reposync/REPOSITORY_LABEL/"
             root = os.path.join(CACHE_DIR, str(org or "NULL"), self.reponame)
             self.repo = DebRepo(
-                url,
-                root,
-                os.path.join(CFG.MOUNT_POINT, CFG.PREPENDED_DIR, self.org, "stage"),
-                self.proxy_addr,
-                self.proxy_user,
-                self.proxy_pass,
+                url=url,
+                cache_dir=root,
+                pkg_dir=os.path.join(CFG.MOUNT_POINT, CFG.PREPENDED_DIR, self.org, "stage"),
+                proxy_addr=self.proxy_addr,
+                proxy_user=self.proxy_user,
+                proxy_pass=self.proxy_pass,
                 gpg_verify=not (insecure),
                 channel_label=channel_label,
                 timeout=self.timeout,
@@ -323,7 +325,7 @@ class ContentSource:
         # No mediaproducts data
         return None
 
-    def list_packages(self, filters, latest):
+    def list_packages(self, filters, latest: bool):
         """list packages"""
 
         pkglist = self.repo.get_package_list()
@@ -331,12 +333,9 @@ class ContentSource:
         if latest:
             latest_pkgs = {}
             for pkg in pkglist:
-                # pylint: disable-next=consider-using-f-string
-                ident = "{}.{}".format(pkg.name, pkg.arch)
-                # pylint: disable-next=consider-iterating-dictionary
-                if ident not in latest_pkgs.keys() or LooseVersion(
-                    pkg.evr()
-                ) > LooseVersion(latest_pkgs[ident].evr()):
+                ident = f"{pkg.name}.{pkg.arch}"
+                seen = latest_pkgs.get(ident)
+                if seen is None or LooseVersion(pkg.evr()) > LooseVersion(seen.evr()):
                     latest_pkgs[ident] = pkg
             pkglist = list(latest_pkgs.values())
         pkglist.sort(key=cmp_to_key(self._sort_packages))
