@@ -46,6 +46,7 @@
 %global sslrootcert %{_sysconfdir}/pki/trust/anchors/
 %endif
 
+%{?sle15allpythons}
 Name:           spacewalk-backend
 Version:        5.1.1
 Release:        0
@@ -58,17 +59,16 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 %endif
 
-Requires:       python3
 # /etc/rhn is provided by uyuni-base-common
 Requires(pre):  uyuni-base-common
 BuildRequires:  uyuni-base-common
-Requires:       python3-rhnlib >= 2.5.74
-Requires:       python3-rpm
-Requires:       python3-uyuni-common-libs
+Requires:       python-rhnlib >= 2.5.74
+Requires:       python-rpm
+Requires:       python-uyuni-common-libs
 Requires(pre):  %{apache_pkg}
 Requires:       %{apache_pkg}
-Requires:       python3-pycurl
-Requires:       python3-libmodulemd
+Requires:       python-pycurl
+Requires:       python-libmodulemd
 # for Debian support
 Requires:       python3-debian >= 0.1.44
 BuildRequires:  %{m2crypto}
@@ -77,13 +77,16 @@ BuildRequires:  /usr/bin/msgfmt
 BuildRequires:  docbook-utils
 BuildRequires:  fdupes
 BuildRequires:  make
-BuildRequires:  python3
-BuildRequires:  python3-debian
-BuildRequires:  python3-rhn-client-tools
-BuildRequires:  python3-rhnlib >= 2.5.74
-BuildRequires:  python3-rpm
-BuildRequires:  python3-rpm-macros
-BuildRequires:  python3-uyuni-common-libs
+BuildRequires:  python-rpm-macros
+BuildRequires:  %{python_module base}
+BuildRequires:  %{python_module debian}
+BuildRequires:  %{python_module rhn-client-tools}
+BuildRequires:  %{python_module rhnlib >= 2.5.74}
+BuildRequires:  %{python_module rpm}
+BuildRequires:  %{python_module uyuni-common-libs}
+
+%define python_subpackage_only 1
+%python_subpackages
 
 %description
 Generic program files needed by the Spacewalk server machines.
@@ -103,7 +106,7 @@ the Spacewalk backend modules.
 %package sql-postgresql
 Summary:        Postgresql backend for Spacewalk
 Group:          System/Management
-Requires:       python3-psycopg2 >= 2.8.4
+Requires:       python-psycopg2 >= 2.8.4
 Provides:       %{name}-sql-virtual = %{version}-%{release}
 
 %description sql-postgresql
@@ -116,8 +119,8 @@ Group:          System/Management
 Requires(pre):  %{name}-sql = %{version}-%{release}
 Requires:       %{name}-sql = %{version}-%{release}
 Requires:       spacewalk-config
-Requires:       (apache2-mod_wsgi or python3-mod_wsgi)
-Requires:       (python3-pam or python3-python-pam)
+Requires:       (apache2-mod_wsgi or python-mod_wsgi)
+Requires:       (python-pam or python-python-pam)
 
 # cobbler-web is known to break our configuration
 Conflicts:      cobbler-web
@@ -132,7 +135,7 @@ receivers and get them enabled automatically.
 Summary:        Handler for /XMLRPC
 Group:          System/Management
 Requires:       %{name}-server = %{version}-%{release}
-Requires:       python3-rpm
+Requires:       python-rpm
 
 %description xmlrpc
 These are the files required for running the /XMLRPC handler, which
