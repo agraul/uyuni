@@ -21,7 +21,13 @@ import pathlib
 import sys
 from typing import Sequence
 
-from spacewalk.common.rhnConfig import cfg_component
+try:
+    # SUMA 5.0+
+    from spacewalk.common.rhnConfig import cfg_component
+except ImportError:
+    # SUMA 4.3
+    from uyuni.common.context_managers import cfg_component
+
 from spacewalk.server import rhnPackage, rhnSQL
 
 logger = logging.getLogger(__name__)
