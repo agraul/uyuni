@@ -87,7 +87,10 @@ def compare_db_to_file_system(db_rows: Sequence, root: str):
                         "fix": {
                             "db": (
                                 "UPDATE rhnPackage SET path = :path WHERE id = :id",
-                                {"id": pid, "path": str(fs_path)},
+                                {
+                                    "id": pid,
+                                    "path": str(relative_to_mountpoint(fs_path)),
+                                },
                             )
                         },
                     }
@@ -103,6 +106,16 @@ def compare_db_to_file_system(db_rows: Sequence, root: str):
                     }
                 )
     return ret
+
+
+def relative_to_mountpoint(path: pathlib.Path):
+    """Return path relative to mountpoint.
+
+    The mountpoint is "/var/spacewalk" by default.
+    """
+    with cfg_component("server") as cfg:
+        root = cfg.mount_point
+    return path.relative_to(pathlib.Path(root))
 
 
 def find_file(name, epoch, version, release, arch, checksum, org):
