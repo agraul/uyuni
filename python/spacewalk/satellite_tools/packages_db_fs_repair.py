@@ -33,6 +33,7 @@ from spacewalk.server import rhnPackage, rhnSQL
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stderr))
 
+
 def query_db_packages(use_checksum=False, use_nevrao=False):
     """Query DB for all packages and return an iterator."""
     columns = "p.id, p.org_id, p.package_size, p.path"
@@ -79,8 +80,10 @@ def compare_db_to_file_system(db_rows: Sequence, root: str):
         logger.debug("Checking path for package id '%s'", pid)
         if not path or (isinstance(path, str) and path.strip() == ""):
             logger.debug("Path is NULL/empty!")
-            fs_path = find_file(name, epoch, version, release, arch, checksum, org_id)
-            if fs_path:
+            exists, fs_path = find_file(
+                name, epoch, version, release, arch, checksum, org_id
+            )
+            if exists:
                 ret.append(
                     {
                         "message": f"File '{fs_path.name}' exists but is not in the db.",
@@ -98,11 +101,7 @@ def compare_db_to_file_system(db_rows: Sequence, root: str):
             else:
                 ret.append(
                     {
-                        "message": "Package has no 'path' and can't be found in the file system.",
-                        # Destructive, let's leave it out for now
-                        # "fix": {
-                        #     "db": ("DELETE from rhnPackage WHERE id = :id", {"id": pid})
-                        # },
+                        "message": f"DB entry has no 'path' and '{fs_path}' can't be found in the file system.",
                     }
                 )
     return ret
@@ -119,9 +118,19 @@ def relative_to_mountpoint(path: pathlib.Path):
 
 
 def find_file(name, epoch, version, release, arch, checksum, org):
-    """Returns pathlib.Path instance if the file exists or None."""
+    """Look for a file at the location the package should be saved.
+
+    Args:
+      Columns 'name', 'epoch', 'version', 'release', 'arch' 'checksum' and 'org' from a
+      rhnPackage database row.
+    Returns:
+      A tuple(bool, pathlib.Path) that indicates if a file exists and which path was checked
+    """
+
     if org is None:
         org = "NULL"
+    else:
+        org = str(org)
     # build file path based on package metadata
     with cfg_component("server") as cfg:
         root = cfg.mount_point
@@ -143,10 +152,10 @@ def find_file(name, epoch, version, release, arch, checksum, org):
     exists = path.exists()
     if exists:
         logger.debug("File '%s' exists.", path)
-        return path
+        return True, path
     else:
         logger.debug("File '%s' does not exist.", path)
-        return None
+        return False, path
 
 
 def _evr(epoch="", version="", release=""):
