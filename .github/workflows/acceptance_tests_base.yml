@@ -99,7 +99,7 @@ jobs:
 
       - name: Cache jar files (Java/Ivy Dependencies)
         if: ${{ !inputs.skip_tests && needs.filters.outputs.require_acceptance_tests == 'true' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 #v5.0.3
         id: cache-ivy
         with:
           path: java/buildconf/ivy/repository/
@@ -109,7 +109,7 @@ jobs:
 
       - name: Cache obs-to-maven files
         if: ${{ !inputs.skip_tests && needs.filters.outputs.require_acceptance_tests == 'true' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 #v5.0.3
         with:
           path: java/.obs-to-maven-cache
           key: ${{ runner.os }}-build-cache-uyuni-obs-to-maven-${{ hashFiles('**/java/buildconf/ivy/obs-maven-config.yaml') }}
@@ -120,7 +120,7 @@ jobs:
       - name: Use cached NPM dependencies
         if: ${{ !inputs.skip_tests && needs.filters.outputs.require_acceptance_tests == 'true' }}
         id: cache-node-modules
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 #v5.0.3
         env:
           cache-name: cache-node-modules
         with:
