@@ -20,62 +20,34 @@
 # in this software or its documentation.
 #
 
-from __future__ import absolute_import, unicode_literals
-
-# pylint: disable-next=unused-import
-from shutil import rmtree, copytree
-
 import configparser
 import fnmatch
-
-# pylint: disable-next=unused-import
-import glob
-
-# pylint: disable-next=unused-import
-import gzip
-
-# pylint: disable-next=unused-import
-import bz2
-
-# pylint: disable-next=unused-import
-import lzma
+import json
 import os
 import re
-import solv
 import subprocess
 import sys
 import tempfile
 import traceback
-
-# pylint: disable-next=unused-import
-import types
-import urlgrabber
-import json
-
-try:
-    from urllib import urlencode, unquote, quote
-    from urlparse import urlsplit, urlparse, urlunparse
-# pylint: disable-next=bare-except
-except:
-    from urllib.parse import urlsplit, urlencode, urlparse, urlunparse, unquote, quote
-
 import xml.etree.ElementTree as etree
-
 from functools import cmp_to_key
 from shlex import quote as sh_quote
-from uyuni.common import checksum, fileutils
-from spacewalk.common import rhnLog
-from spacewalk.satellite_tools.repo_plugins import ContentPackage, CACHE_DIR
-from spacewalk.satellite_tools.download import get_proxies
-from spacewalk.satellite_tools.syncLib import log
+from shutil import rmtree
+from urllib.parse import quote, unquote, urlencode, urlparse, urlsplit, urlunparse
 
-# pylint: disable-next=unused-import
-from spacewalk.common.rhnConfig import cfg_component
-from spacewalk.common.suseLib import get_proxy, URL as suseLibURL, get_content_type
+import solv
+import urlgrabber
 from rhn.stringutils import sstr
+from spacewalk.common import rhnLog
+from spacewalk.common.rhnConfig import cfg_component
+from spacewalk.common.suseLib import URL as suseLibURL
+from spacewalk.common.suseLib import get_content_type, get_proxy
+from spacewalk.satellite_tools.download import get_proxies
+from spacewalk.satellite_tools.repo_plugins import CACHE_DIR, ContentPackage
+from spacewalk.satellite_tools.syncLib import log
 from urlgrabber.grabber import URLGrabError
 from urlgrabber.mirror import MirrorGroup
-
+from uyuni.common import checksum, fileutils
 
 # namespace prefix to parse patches.xml file
 PATCHES_XML = "{http://novell.com/package/metadata/suse/patches}"
