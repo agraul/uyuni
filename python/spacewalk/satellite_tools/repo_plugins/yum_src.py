@@ -937,9 +937,11 @@ type=rpm-md
         # https://bugzilla.suse.com/show_bug.cgi?id=1245221
         zypper_env = os.environ.copy()
         zypper_env["ZYPP_CURL2"] = "1"
-        # pylint: disable-next=subprocess-run-check
         process = subprocess.run(
-            zypper_cmd.split(" "), stderr=subprocess.PIPE, env=zypper_env
+            zypper_cmd.split(" "),
+            stderr=subprocess.PIPE,
+            env=zypper_env,
+            check=False,
         )
 
         if process.returncode:
