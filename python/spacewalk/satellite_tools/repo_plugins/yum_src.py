@@ -1,8 +1,7 @@
-#  pylint: disable=missing-module-docstring
 # coding: utf-8
 #
 # Copyright (c) 2008--2018 Red Hat, Inc.
-# Copyright (c) 2010--2019 SUSE LINUX GmbH, Nuernberg, Germany.
+# Copyright (c) 2010--2026 SUSE LLC
 #
 # This software is licensed to you under the GNU General Public License,
 # version 2 (GPLv2). There is NO WARRANTY for this software, express or
@@ -19,6 +18,11 @@
 # granted to use or replicate Red Hat trademarks that are incorporated
 # in this software or its documentation.
 #
+"""Reposync plugin for RPM repositories.
+
+Uses Zypper and libsolv to parse repository metadata and produce a list of packages.
+GPG keys from /var/lib/spacewalk/gpgdir are used to verify repository metadata.
+"""
 
 import configparser
 import fnmatch
