@@ -7,12 +7,12 @@ sequenceDiagram
     participant Reposync as metadata-only repo sync
     participant Bootstrap as mgr-create-bootstrap-repo
     participant WebUI as WebUI Button / API call
-    participant Endpoint as /rhn/manager/download/...
+    participant DB as DB: rhnPackage
     participant Taskomatic
     participant Task as Package Downloads task
+    participant Endpoint as /rhn/manager/download/...
     participant Module as PackageDownloadModule
     participant Thread as DownloadThread 1..N
-    participant DB as DB: rhnPackage
     participant Upstream as Upstream Repository
 
     rect rgb(240, 240, 240)
@@ -24,7 +24,7 @@ sequenceDiagram
     end
 
     rect rgb(230, 240, 255)
-    Note over Endpoint,Module: Initiate package download
+    Note over WebUI,Module: Initiate package download
     Taskomatic->>Task: Trigger
     Task->>DB: Query packages to download, sorted by priority
     DB-->>Task: Package list
@@ -33,7 +33,7 @@ sequenceDiagram
     end
 
     rect rgb(235, 255, 235)
-    Note over Module,Upstream: Package download internals
+    Note over DB,Upstream: Package download internals
     Module->>Thread: Dispatch download
     Thread->>DB: 1. Lock row of package to download
     Thread->>Upstream: 2. Download RPM/Deb
@@ -48,14 +48,14 @@ sequenceDiagram
 sequenceDiagram
     participant Reposync as metadata-only repo sync
     participant WebUI as WebUI Button / API call
-    participant Bootstrap as mgr-create-bootstrap-repo
-    participant Endpoint as /rhn/manager/download/...
+    participant DB as DB: rhnPackage
     participant Taskomatic
     participant Task as Packages Download task
+    participant Bootstrap as mgr-create-bootstrap-repo
+    participant Endpoint as /rhn/manager/download/...
     participant Downloader as PackageDownloader
     participant Queue as Internal priority queue
     participant Thread as DownloadThread 1..N
-    participant DB as DB: rhnPackage
     participant Upstream as Upstream Repository
 
     rect rgb(240, 240, 240)
@@ -65,7 +65,7 @@ sequenceDiagram
     end
 
     rect rgb(230, 240, 255)
-    Note over Endpoint,Downloader: Initialize package download
+    Note over WebUI,Downloader: Initiate package download
     Taskomatic->>Task: Trigger
     Task->>DB: Query packages to download
     DB-->>Task: Package list (with priority)
@@ -76,7 +76,7 @@ sequenceDiagram
     end
 
     rect rgb(235, 255, 235)
-    Note over Downloader,Upstream: Package download internals
+    Note over DB,Upstream: Package download internals
     Downloader->>Queue: Insert download request
     Queue->>Queue: Deduplicate requests / update priorities
     loop For each queued request, highest priority first

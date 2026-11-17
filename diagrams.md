@@ -42,7 +42,7 @@ flowchart LR
     webui-->|Modify priority| rhnPackage
     end
 
-    subgraph Initialize package download
+    subgraph Initiate package download
     Taskomatic(Taskomatic) -->|Trigger| Task(Packages Download task)
     Task -->|Query packages to download|rhnPackage
     Task -->|Request package download priority=0..9;taken from DB| PackageDownloader
