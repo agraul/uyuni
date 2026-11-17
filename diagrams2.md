@@ -58,24 +58,32 @@ sequenceDiagram
     participant DB as DB: rhnPackage
     participant Upstream as Upstream Repository
 
+    rect rgb(240, 240, 240)
+    Note over Reposync,DB: Populate DB
     Reposync->>DB: Add entry
     WebUI->>DB: Modify priority
+    end
 
+    rect rgb(230, 240, 255)
+    Note over Endpoint,Downloader: Initialize package download
     Taskomatic->>Task: Trigger
     Task->>DB: Query packages to download
     DB-->>Task: Package list (with priority)
     Task->>Downloader: Request download (priority 0..9, taken from DB)
-
     Endpoint->>Downloader: Request download (priority 10)
     Bootstrap->>Downloader: Request bootstrap package download (priority 7)
     WebUI->>Downloader: Request download (priority 8)
+    end
 
-    Downloader->>Queue: 1. Insert download request
-
+    rect rgb(235, 255, 235)
+    Note over Downloader,Upstream: Package download internals
+    Downloader->>Queue: Insert download request
+    Queue->>Queue: Deduplicate requests / update priorities
     loop For each queued request, highest priority first
         Queue->>Thread: Next request
         Thread->>Upstream: 1. Download RPM/Deb
         Upstream-->>Thread: Package file
         Thread->>DB: 2. Update download status + path
+    end
     end
 ```
