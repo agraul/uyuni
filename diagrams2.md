@@ -24,7 +24,7 @@ sequenceDiagram
     end
 
     rect rgb(230, 240, 255)
-    Note over WebUI,Module: Initiate package download
+    Note over DB,Module: Initiate package download
     Taskomatic->>Task: Trigger
     Task->>DB: Query packages to download, sorted by priority
     DB-->>Task: Package list
@@ -35,10 +35,10 @@ sequenceDiagram
     rect rgb(235, 255, 235)
     Note over DB,Upstream: Package download internals
     Module->>Thread: Dispatch download
-    Thread->>DB: 1. Lock row of package to download
-    Thread->>Upstream: 2. Download RPM/Deb
+    Thread->>DB: Lock row of package to download
+    Thread->>Upstream: Download RPM/Deb
     Upstream-->>Thread: Package file
-    Thread->>DB: 3. Update download status + path
+    Thread->>DB: Update download status + path
     end
 ```
 
@@ -81,9 +81,9 @@ sequenceDiagram
     Queue->>Queue: Deduplicate requests / update priorities
     loop For each queued request, highest priority first
         Queue->>Thread: Next request
-        Thread->>Upstream: 1. Download RPM/Deb
+        Thread->>Upstream: Download RPM/Deb
         Upstream-->>Thread: Package file
-        Thread->>DB: 2. Update download status + path
+        Thread->>DB: Update download status + path
     end
     end
 ```
