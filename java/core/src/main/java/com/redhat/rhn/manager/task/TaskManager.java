@@ -25,6 +25,7 @@ import com.redhat.rhn.frontend.dto.PackageCapabilityDto;
 import com.redhat.rhn.frontend.dto.PackageChangelogDto;
 import com.redhat.rhn.frontend.dto.PackageDto;
 import com.redhat.rhn.taskomatic.task.TaskConstants;
+import com.redhat.rhn.taskomatic.task.repomd.SaltProtocolAbi;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -54,6 +55,23 @@ public class TaskManager {
         Map<String, Object> params = new HashMap<>();
         params.put("channel_id", channel.getId());
         return m.execute(params);
+    }
+
+    /**
+     * Get the ids of the channel packages providing the {@code salt-protocol-abi} capability.
+     * @param channel channel info
+     * @return a map of package id to the provided ABI string
+     */
+    public static Map<Long, String> getChannelSaltProtocolAbis(Channel channel) {
+        SelectMode m = ModeFactory.getMode(TaskConstants.MODE_NAME,
+                TaskConstants.TASK_QUERY_REPOMD_GENERATOR_CHANNEL_SALT_PROTOCOL_ABI);
+        Map<String, Object> params = new HashMap<>();
+        params.put("channel_id", channel.getId());
+        params.put("capability_name", SaltProtocolAbi.CAPABILITY_NAME);
+        DataResult<Map<String, Object>> result = m.execute(params);
+        return result.stream().collect(
+                Collectors.toMap(row -> (Long) row.get("package_id"), row -> (String) row.get("version"),
+                        (first, second) -> first));
     }
 
     /**

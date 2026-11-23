@@ -40,6 +40,8 @@ public abstract class RepomdWriter {
 
     protected SimpleContentHandler handler;
 
+    private int excludedPackageCount;
+
     private static final String CONTROL_CHARS;
     private static final String CONTROL_CHARS_REPLACEMENT;
 
@@ -154,6 +156,22 @@ public abstract class RepomdWriter {
         return StringUtils.replaceChars(input, CONTROL_CHARS, CONTROL_CHARS_REPLACEMENT);
     }
 
+
+    /**
+     * Set the number of channel packages that are left out of the metadata.
+     * @param excludedPackageCountIn number of excluded packages
+     */
+    public void setExcludedPackageCount(int excludedPackageCountIn) {
+        excludedPackageCount = excludedPackageCountIn;
+    }
+
+    /**
+     * @param channel channel info
+     * @return the number of channel packages written to the metadata
+     */
+    protected int getWrittenPackageCount(Channel channel) {
+        return channel.getPackageCount() - excludedPackageCount;
+    }
 
     /**
      *

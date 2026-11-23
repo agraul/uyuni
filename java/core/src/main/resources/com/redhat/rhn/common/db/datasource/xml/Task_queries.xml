@@ -607,6 +607,17 @@ where snc.errata_id = :errata_id
     <elaborator name="repomdgenerator_package_elab" />
 </mode>
 
+<mode name="repomdgenerator_channel_salt_protocol_abi">
+    <query params="channel_id, capability_name">
+        SELECT cp.package_id AS package_id, pkgcap.version AS version
+        FROM rhnChannelPackage cp
+        JOIN rhnPackageProvides pkgp ON pkgp.package_id = cp.package_id
+        JOIN rhnPackageCapability pkgcap ON pkgcap.id = pkgp.capability_id
+        WHERE cp.channel_id = :channel_id
+          AND pkgcap.name = :capability_name
+    </query>
+</mode>
+
 <mode name="repomdgenerator_channel_package_extratags">
     <query>
         SELECT pet.package_id as package_id, petk.name as name, pet.value as value

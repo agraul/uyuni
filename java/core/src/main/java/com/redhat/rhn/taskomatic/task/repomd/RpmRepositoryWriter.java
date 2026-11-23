@@ -53,7 +53,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  *
@@ -216,6 +220,36 @@ public class RpmRepositoryWriter extends RepositoryWriter {
     }
 
     /**
+     * Find the packages of a channel that must not be part of the metadata because they require a newer
+     * Salt protocol ABI than the Salt Master provides. Packages without the capability are compatible.
+     * If the ABI of the Salt Master is unknown, all packages are compatible.
+     */
+    private Set<Long> findIncompatibleSaltPackageIds(Channel channel) {
+        String configuredAbi = ConfigDefaults.get().getSaltProtocolAbi();
+        Optional<SaltProtocolAbi> masterAbi = SaltProtocolAbi.parse(configuredAbi);
+        if (masterAbi.isEmpty()) {
+            log.info("Salt Master protocol ABI '{}' is unknown or invalid, not excluding Salt packages",
+                    configuredAbi);
+            return Collections.emptySet();
+        }
+        Set<Long> excluded = new HashSet<>();
+        Map<Long, String> packageAbis = TaskManager.getChannelSaltProtocolAbis(channel);
+        log.debug("Salt Master protocol ABI is {}, channel '{}' has {} packages providing {}: {}", masterAbi.get(),
+                channel.getLabel(), packageAbis.size(), SaltProtocolAbi.CAPABILITY_NAME, packageAbis);
+        packageAbis.forEach((packageId, version) -> {
+            Optional<SaltProtocolAbi> packageAbi = SaltProtocolAbi.parse(version);
+            if (packageAbi.isPresent() && !packageAbi.get().isCompatibleWith(masterAbi.get())) {
+                excluded.add(packageId);
+            }
+        });
+        if (!excluded.isEmpty()) {
+            log.info("Excluding {} Salt packages incompatible with protocol ABI {} from channel '{}'",
+                    excluded.size(), masterAbi.get(), channel.getLabel());
+        }
+        return excluded;
+    }
+
+    /**
      *
      * @param channel channelinfo for repomd file creation
      */
@@ -292,6 +326,12 @@ public class RpmRepositoryWriter extends RepositoryWriter {
                 susedataBufferedWriter);
         Date start = new Date();
 
+        Set<Long> excludedPackageIds = findIncompatibleSaltPackageIds(channel);
+        primary.setExcludedPackageCount(excludedPackageIds.size());
+        filelists.setExcludedPackageCount(excludedPackageIds.size());
+        other.setExcludedPackageCount(excludedPackageIds.size());
+        susedata.setExcludedPackageCount(excludedPackageIds.size());
+
         primary.begin(channel);
         filelists.begin(channel);
         other.begin(channel);
@@ -303,6 +343,9 @@ public class RpmRepositoryWriter extends RepositoryWriter {
             DataResult<PackageDto> packageBatch = TaskManager.getChannelPackageDtos(channel, i, batchSize);
             packageBatch.elaborate();
             for (PackageDto pkgDto : packageBatch) {
+                if (excludedPackageIds.contains(pkgDto.getId())) {
+                    continue;
+                }
                 // this is a sanity check
                 // package may have been deleted before packageBatch.elaborate()
                 if (pkgDto.getChecksum() == null) {

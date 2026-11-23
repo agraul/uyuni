@@ -137,6 +137,9 @@ public class TaskConstants {
     public static final String TASK_QUERY_REPOMD_GENERATOR_CHANNEL_PACKAGES_BATCH =
         "repomdgenerator_channel_package_batch";
 
+    public static final String TASK_QUERY_REPOMD_GENERATOR_CHANNEL_SALT_PROTOCOL_ABI =
+        "repomdgenerator_channel_salt_protocol_abi";
+
     public static final String TASK_QUERY_REPOMD_GENERATOR_CAPABILITY_FILES =
         "repomdgenerator_capability_files";
 

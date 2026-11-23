@@ -68,7 +68,7 @@ public class SuseDataXmlWriter extends RepomdWriter {
         SimpleAttributesImpl attr = new SimpleAttributesImpl();
         attr.addAttribute("xmlns", "http://linux.duke.edu/metadata/common");
         attr.addAttribute("xmlns:rpm", "http://linux.duke.edu/metadata/rpm");
-        attr.addAttribute("packages", Integer.toString(channel.getPackageCount()));
+        attr.addAttribute("packages", Integer.toString(getWrittenPackageCount(channel)));
 
         try {
             handler.startElement("susedata", attr);

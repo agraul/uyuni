@@ -1,0 +1,2 @@
+- Leave Salt packages with an incompatible protocol ABI out of
+  the repository metadata

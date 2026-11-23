@@ -72,7 +72,7 @@ public class FilelistsXmlWriter extends RepomdWriter {
     public void begin(Channel channel) {
         SimpleAttributesImpl attr = new SimpleAttributesImpl();
         attr.addAttribute("xmlns", "http://linux.duke.edu/metadata/filelists");
-        attr.addAttribute("packages", Integer.toString(channel.getPackageCount()));
+        attr.addAttribute("packages", Integer.toString(getWrittenPackageCount(channel)));
 
         try {
             handler.startElement("filelists", attr);
