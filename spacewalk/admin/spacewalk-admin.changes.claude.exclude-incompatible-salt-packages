@@ -1,0 +1,2 @@
+- Store the Salt protocol ABI of the Salt Master in the database
+  on startup

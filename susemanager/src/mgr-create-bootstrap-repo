@@ -22,7 +22,6 @@ from typing import List
 
 from rhn import rhnLockfile
 from spacewalk.server import rhnSQL
-from spacewalk.server.db_config import DB_CFG
 from spacewalk.common.rhnLog import initLOG, log_time, log_clean, log_debug
 from spacewalk.common.rhnConfig import cfg_component
 from spacewalk.susemanager import salt_protocol_abi
@@ -622,11 +621,10 @@ def list_labels(mgr_bootstrap_data, force=False, do_print=True):
 
 def get_master_salt_protocol_abi():
     """Return the Salt protocol ABI of the Salt Master or None if it is unknown."""
-    try:
-        value = DB_CFG.get("SALT_PROTOCOL_ABI")
-    except AttributeError:
-        return None
-    return salt_protocol_abi.parse(value)
+    h = rhnSQL.prepare("SELECT salt_protocol_abi FROM suseManagerInfo")
+    h.execute()
+    row = h.fetchone_dict()
+    return salt_protocol_abi.parse(row["salt_protocol_abi"] if row else None)
 
 
 def read_repo_salt_protocol_abi(destdir):

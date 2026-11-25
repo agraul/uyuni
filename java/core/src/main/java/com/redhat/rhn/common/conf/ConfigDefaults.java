@@ -145,8 +145,6 @@ public class ConfigDefaults {
 
     public static final String REPOMD_CACHE_MOUNT_POINT = "repomd_cache_mount_point";
 
-    public static final String SALT_PROTOCOL_ABI = "salt_protocol_abi";
-
     //Comma separated names of possible kickstart packages
     private static final String POSSIBLE_KICKSTART_PACKAGE_NAMES = "salt";
 
@@ -595,24 +593,6 @@ public class ConfigDefaults {
      */
     public String getRepomdCacheMountPoint() {
         return Config.get().getString(REPOMD_CACHE_MOUNT_POINT, "/var/cache");
-    }
-
-    /**
-     * Get the protocol ABI of the Salt Master, as "major.auth.tiebreaker".
-     * @return the configured value, or an empty string if unknown
-     */
-    public String getSaltProtocolAbi() {
-        try {
-            String value = RhnConfigurationFactory.getSingleton().getString(RhnConfiguration.KEYS.SALT_PROTOCOL_ABI);
-            if (StringUtils.isNotEmpty(value)) {
-                return value;
-            }
-        }
-        catch (Exception e) {
-            org.apache.logging.log4j.LogManager.getLogger(ConfigDefaults.class)
-                .warn("Cannot read SALT_PROTOCOL_ABI from the database, falling back to rhn.conf", e);
-        }
-        return Config.get().getString(SALT_PROTOCOL_ABI, "");
     }
 
     /**

@@ -25,6 +25,7 @@ import com.redhat.rhn.common.util.StringUtil;
 import com.redhat.rhn.domain.channel.Channel;
 import com.redhat.rhn.domain.channel.ChannelFactory;
 import com.redhat.rhn.domain.channel.RepoMetadata;
+import com.redhat.rhn.domain.common.ManagerInfoFactory;
 import com.redhat.rhn.frontend.dto.PackageDto;
 import com.redhat.rhn.manager.channel.ChannelManager;
 import com.redhat.rhn.manager.rhnpackage.PackageManager;
@@ -225,11 +226,11 @@ public class RpmRepositoryWriter extends RepositoryWriter {
      * If the ABI of the Salt Master is unknown, all packages are compatible.
      */
     private Set<Long> findIncompatibleSaltPackageIds(Channel channel) {
-        String configuredAbi = ConfigDefaults.get().getSaltProtocolAbi();
-        Optional<SaltProtocolAbi> masterAbi = SaltProtocolAbi.parse(configuredAbi);
+        Optional<String> storedAbi = ManagerInfoFactory.getSaltProtocolAbi();
+        Optional<SaltProtocolAbi> masterAbi = storedAbi.flatMap(SaltProtocolAbi::parse);
         if (masterAbi.isEmpty()) {
             log.info("Salt Master protocol ABI '{}' is unknown or invalid, not excluding Salt packages",
-                    configuredAbi);
+                    storedAbi.orElse(""));
             return Collections.emptySet();
         }
         Set<Long> excluded = new HashSet<>();

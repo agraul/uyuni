@@ -60,7 +60,6 @@ def test_get_default():
         "PSW_CHECK_SPECIAL_CHARACTERS",
         "HTTP_PROXY_USERNAME",
         "HTTP_PROXY_PASSWORD",
-        "SALT_PROTOCOL_ABI",
     ],
 )
 def test_string_keys_are_not_converted(key):

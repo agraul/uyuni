@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 SUSE LLC
+#
+# SPDX-License-Identifier: GPL-2.0-only
+
+[Unit]
+Description=Uyuni store Salt Master protocol ABI
+After=salt-master.service uyuni-check-database.service
+Requires=uyuni-check-database.service
+Before=tomcat.service taskomatic.service
+
+[Service]
+ExecStart=/usr/sbin/uyuni-salt-protocol-abi
+Type=oneshot
+RemainAfterExit=yes

@@ -82,6 +82,3 @@ VALUES ('SYNC_SOURCE_PACKAGES', 'Synchronize source packages with reposync', nul
 
 INSERT INTO rhnConfiguration (key, description, value, default_value)
 VALUES ('URLGRABBER_LOGSPEC', 'urlgrabber debug logging of reposync in the form level,filename (for example 1,-)', null, null);
-
-INSERT INTO rhnConfiguration (key, description, value, default_value)
-VALUES ('SALT_PROTOCOL_ABI', 'Salt Master protocol ABI', null, null);

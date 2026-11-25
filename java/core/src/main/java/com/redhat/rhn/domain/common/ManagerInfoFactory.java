@@ -58,7 +58,7 @@ public class ManagerInfoFactory extends HibernateFactory {
         SelectMode m = ModeFactory.getMode("util_queries", "get_last_mgr_sync_refresh");
         DataResult<Row> dr = m.execute(params);
         if (!dr.isEmpty()) {
-            return Optional.of((Date) dr.get(0).get("last_mgr_sync_refresh"));
+            return Optional.ofNullable((Date) dr.get(0).get("last_mgr_sync_refresh"));
         }
         return Optional.empty();
     }
@@ -81,9 +81,24 @@ public class ManagerInfoFactory extends HibernateFactory {
         Map<String, Object> params = new HashMap<>();
         params.put("lastrefresh", new Timestamp(milliseconds));
 
-        WriteMode m = ModeFactory.getWriteMode("util_queries",
-                getLastMgrSyncRefresh().isEmpty() ? "set_last_mgr_sync_refresh" : "update_last_mgr_sync_refresh");
-        m.executeUpdate(params);
+        WriteMode update = ModeFactory.getWriteMode("util_queries", "update_last_mgr_sync_refresh");
+        if (update.executeUpdate(params) == 0) {
+            ModeFactory.getWriteMode("util_queries", "set_last_mgr_sync_refresh").executeUpdate(params);
+        }
+    }
+
+    /**
+     * Return the protocol ABI of the Salt Master, as "major.auth.tiebreaker".
+     * It is stored on startup by uyuni-salt-protocol-abi.
+     * @return the Salt Master protocol ABI, or empty if unknown
+     */
+    public static Optional<String> getSaltProtocolAbi() {
+        SelectMode m = ModeFactory.getMode("util_queries", "get_salt_protocol_abi");
+        DataResult<Row> dr = m.execute(new HashMap<>());
+        if (!dr.isEmpty()) {
+            return Optional.ofNullable((String) dr.get(0).get("salt_protocol_abi"));
+        }
+        return Optional.empty();
     }
 
 }

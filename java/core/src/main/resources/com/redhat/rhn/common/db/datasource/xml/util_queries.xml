@@ -44,6 +44,13 @@ SPDX-License-Identifier: GPL-2.0-only
    </query>
 </write-mode>
 
+<mode name="get_salt_protocol_abi">
+  <query>
+    SELECT salt_protocol_abi
+    FROM suseManagerInfo
+  </query>
+</mode>
+
 <write-mode name="set_satconfig_value">
   <query params="key, value">
     UPDATE rhnConfiguration

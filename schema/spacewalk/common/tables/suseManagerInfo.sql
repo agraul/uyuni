@@ -17,7 +17,8 @@
 
 CREATE TABLE suseManagerInfo
 (
-    last_mgr_sync_refresh   TIMESTAMPTZ
+    last_mgr_sync_refresh   TIMESTAMPTZ,
+    salt_protocol_abi       VARCHAR(32)
 )
 
 ;

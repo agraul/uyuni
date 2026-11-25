@@ -1,0 +1,89 @@
+#!/usr/bin/python3
+#
+# SPDX-FileCopyrightText: 2026 SUSE LLC
+#
+# SPDX-License-Identifier: GPL-2.0-only
+#
+#  pylint: disable=invalid-name
+"""
+Store the Salt protocol ABI of the Salt Master in the suseManagerInfo table.
+
+When the ABI cannot be determined, the previously stored value is kept.
+"""
+
+import json
+import re
+import subprocess
+import sys
+
+from spacewalk.server import rhnSQL
+
+GRAIN = "__suse_reserved_protocol_abi"
+ABI_FORMAT = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def get_master_abi():
+    """Return the protocol ABI reported by the Salt Master grain or None."""
+    try:
+        result = subprocess.run(
+            [
+                "salt-run",
+                "--out=json",
+                "--log-level=quiet",
+                "salt.cmd",
+                "grains.get",
+                GRAIN,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            check=True,
+            timeout=300,
+        )
+        value = json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        print(f"Failed to get the Salt Master grain {GRAIN}: {e}")
+        return None
+    if not isinstance(value, str) or not ABI_FORMAT.match(value.strip()):
+        print(f"Salt Master grain {GRAIN} has no valid value: {value!r}")
+        return None
+    return value.strip()
+
+
+def get_stored_abi():
+    """Return a tuple (row_exists, stored ABI)."""
+    h = rhnSQL.prepare("SELECT salt_protocol_abi FROM suseManagerInfo")
+    h.execute()
+    row = h.fetchone_dict()
+    return (row is not None, row["salt_protocol_abi"] if row else None)
+
+
+def store_abi(abi):
+    """Store the ABI in the database. Return True if the value changed."""
+    rhnSQL.initDB()
+    row_exists, stored_abi = get_stored_abi()
+    if stored_abi == abi:
+        return False
+    if row_exists:
+        h = rhnSQL.prepare("UPDATE suseManagerInfo SET salt_protocol_abi = :abi")
+    else:
+        h = rhnSQL.prepare(
+            "INSERT INTO suseManagerInfo (salt_protocol_abi) VALUES (:abi)"
+        )
+    h.execute(abi=abi)
+    rhnSQL.commit()
+    return True
+
+
+def main():
+    abi = get_master_abi()
+    if abi is None:
+        print("Keeping the previously stored Salt Master protocol ABI")
+        return 0
+    if store_abi(abi):
+        print(f"Salt Master protocol ABI changed to {abi}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
