@@ -18,6 +18,7 @@ Requires=cobblerd.service
 Requires=taskomatic.service
 Requires=spacewalk-wait-for-taskomatic.service
 Requires=salt-secrets-config.service
+Requires=uyuni-salt-protocol-abi.service
 Requires=cobbler-refresh-mkloaders.service
 
 [Install]

@@ -22,8 +22,10 @@ from typing import List
 
 from rhn import rhnLockfile
 from spacewalk.server import rhnSQL
+from spacewalk.server.db_config import DB_CFG
 from spacewalk.common.rhnLog import initLOG, log_time, log_clean, log_debug
 from spacewalk.common.rhnConfig import cfg_component
+from spacewalk.susemanager import salt_protocol_abi
 
 # pylint: disable-next=unused-import
 from uyuni.common import usix, rhnLib
@@ -40,6 +42,8 @@ LOCK = None
 BETA = None
 logfile = "/var/log/rhn/mgr-create-bootstrap-repo/mgr-create-bootstrap-repo.log"
 UYUNI = None
+# records the Salt protocol ABI of the Salt Master a bootstrap repo was created for
+SALT_PROTOCOL_ABI_FILE = "salt-protocol-abi.txt"
 
 _sql_synced_proucts = rhnSQL.Statement(
     """
@@ -111,6 +115,7 @@ SELECT distinct
         ) spc ON spc.id = c.id
   WHERE pn.name = :pkgname
     AND NOT CP.is_retracted
+    AND NOT pkg.id = ANY(CAST(string_to_array(:excluded_ids, ',') AS numeric[]))
 ORDER BY pkg.id
 """
 
@@ -141,10 +146,14 @@ SELECT distinct
                                               FROM rhnChannel pc
                                              WHERE pc.label = :parentchannel)
                   ) channels
-           JOIN  rhnChannelNewestPackage I_CNP ON channels.id = I_CNP.channel_id
-           JOIN  rhnPackage I_P ON I_CNP.package_id = I_P.id
+           JOIN  suseChannelPackageRetractedStatusView I_CP ON channels.id = I_CP.channel_id
+           JOIN  susePackageExcludingPartOfPtf I_P ON I_CP.package_id = I_P.id
+           JOIN  rhnPackageName I_PN ON I_P.name_id = I_PN.id
            JOIN  rhnPackageEVR I_PE ON I_P.evr_id = I_PE.id
            JOIN  rhnPackageArch I_PA ON I_P.package_arch_id = I_PA.id
+          WHERE  I_PN.name = :pkgname
+            AND  NOT I_CP.is_retracted
+            AND  NOT I_P.id = ANY(CAST(string_to_array(:excluded_ids, ',') AS numeric[]))
        GROUP BY  I_P.name_id, I_PA.label, I_PA.id, root
      ) full_list,
        rhnPackage pkg
@@ -157,6 +166,7 @@ SELECT distinct
    AND full_list.arch_id = pkg.package_arch_id
    AND (c.parent_channel = full_list.root OR c.id = full_list.root)
    AND pn.name = :pkgname
+   AND NOT pkg.id = ANY(CAST(string_to_array(:excluded_ids, ',') AS numeric[]))
 ORDER BY pkg.id
 """
 
@@ -182,10 +192,14 @@ SELECT DISTINCT
                                               FROM rhnChannel pc
                                              WHERE pc.label = :parentchannel)
                   ) channels
-           JOIN  rhnChannelNewestPackage I_CNP ON channels.id = I_CNP.channel_id
-           JOIN  rhnPackage I_P ON I_CNP.package_id = I_P.id
+           JOIN  suseChannelPackageRetractedStatusView I_CP ON channels.id = I_CP.channel_id
+           JOIN  susePackageExcludingPartOfPtf I_P ON I_CP.package_id = I_P.id
+           JOIN  rhnPackageName I_PN ON I_P.name_id = I_PN.id
            JOIN  rhnPackageEVR I_PE ON I_P.evr_id = I_PE.id
            JOIN  rhnPackageArch I_PA ON I_P.package_arch_id = I_PA.id
+          WHERE  I_PN.name = :pkgname
+            AND  NOT I_CP.is_retracted
+            AND  NOT I_P.id = ANY(CAST(string_to_array(:excluded_ids, ',') AS numeric[]))
        GROUP BY  I_P.name_id, I_PA.label, I_PA.id, root
      ) full_list,
        rhnPackage pkg
@@ -198,9 +212,19 @@ SELECT DISTINCT
    AND full_list.arch_id = pkg.package_arch_id
    AND (c.parent_channel = full_list.root OR c.id = full_list.root)
    AND pn.name = :pkgname
+   AND NOT pkg.id = ANY(CAST(string_to_array(:excluded_ids, ',') AS numeric[]))
 ORDER BY pkg.id
 """
 
+
+_sql_find_salt_protocol_abi_pkgs = """
+SELECT pkg.id, pn.name, pkg.path, pc.version
+  FROM rhnPackage pkg
+  JOIN rhnPackageName pn ON pkg.name_id = pn.id
+  JOIN rhnPackageProvides pp ON pp.package_id = pkg.id
+  JOIN rhnPackageCapability pc ON pp.capability_id = pc.id
+ WHERE pc.name = :capability
+"""
 
 _find_mand_modified_repos = """
 select X.product_id, c0.label, c0.last_synced,
@@ -596,6 +620,53 @@ def list_labels(mgr_bootstrap_data, force=False, do_print=True):
     return label_map
 
 
+def get_master_salt_protocol_abi():
+    """Return the Salt protocol ABI of the Salt Master or None if it is unknown."""
+    try:
+        value = DB_CFG.get("SALT_PROTOCOL_ABI")
+    except AttributeError:
+        return None
+    return salt_protocol_abi.parse(value)
+
+
+def read_repo_salt_protocol_abi(destdir):
+    """Return the Salt protocol ABI a bootstrap repo was created for, or an empty string."""
+    try:
+        with open(
+            os.path.join(destdir, SALT_PROTOCOL_ABI_FILE), encoding="utf-8"
+        ) as abi_file:
+            return abi_file.read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def find_incompatible_salt_packages(master_abi):
+    """
+    Return the packages providing a Salt protocol ABI that the Salt Master does not support.
+    Packages without a valid ABI are compatible. When the Salt Master ABI is unknown, all packages are compatible.
+    """
+    if master_abi is None:
+        return []
+    h = rhnSQL.prepare(_sql_find_salt_protocol_abi_pkgs)
+    h.execute(capability=salt_protocol_abi.CAPABILITY_NAME)
+    incompatible = []
+    for pkg in h.fetchall_dict() or []:
+        pkg_abi = salt_protocol_abi.parse(pkg["version"])
+        if pkg_abi and not pkg_abi.is_compatible_with(master_abi):
+            incompatible.append(pkg)
+    return incompatible
+
+
+def remove_packages(path, pkgs, dryrun):
+    """Remove package files left in path by a previous bootstrap repo generation."""
+    filenames = {os.path.basename(pkg["path"]) for pkg in pkgs}
+    for file_path in glob.glob(os.path.join(path, "**", "*"), recursive=True):
+        if os.path.basename(file_path) in filenames:
+            log(f"remove incompatible '{os.path.relpath(file_path, path)}'")
+            if not dryrun:
+                os.remove(file_path)
+
+
 def cleanup_dir(path):
     if os.path.exists(path):
         try:
@@ -646,7 +717,11 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
     destdirold = os.path.join(dirprefix, "{0}.{1}".format(lastdir, "old"))
     errors = 0
     messages = []
-    suggestions = {"no-packages": None}
+    suggestions = {"no-packages": None, "incompatible-salt": None}
+    master_abi = get_master_salt_protocol_abi()
+    incompatible_pkgs = find_incompatible_salt_packages(master_abi)
+    incompatible_names = {pkg["name"] for pkg in incompatible_pkgs}
+    excluded_ids = ",".join(str(int(pkg["id"])) for pkg in incompatible_pkgs)
 
     if usecustomchannels:
         if pdids:
@@ -736,6 +811,8 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
         cleanup_dir(os.path.join(destdirtmp, "db"))
         cleanup_dir(os.path.join(destdirtmp, "dists"))
 
+    remove_packages(destdirtmp, incompatible_pkgs, options.dryrun)
+
     for pkgaltstr in packagelist:
         alt = pkgaltstr.split("|")
         # pylint: disable-next=consider-using-f-string
@@ -747,7 +824,9 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
                 optional = True
                 pkgname = pkgname[:-1]
             altcount += 1
-            h.execute(parentchannel=parentchannel, pkgname=pkgname)
+            h.execute(
+                parentchannel=parentchannel, pkgname=pkgname, excluded_ids=excluded_ids
+            )
             pkgs = h.fetchall_dict() or []
             log(
                 # pylint: disable-next=consider-using-f-string
@@ -755,6 +834,15 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
                 2,
             )
             if len(pkgs) == 0:
+                if pkgname in incompatible_names:
+                    log(
+                        f"No version of '{pkgname}' compatible with the Salt Master "
+                        f"(Salt protocol ABI {master_abi}) found"
+                    )
+                    suggestions["incompatible-salt"] = (
+                        "Salt packages requiring a newer Salt protocol ABI than the Salt Master provides\n"
+                        + "are not added to bootstrap repositories. Synchronize a compatible version.\n"
+                    )
                 if optional:
                     # pylint: disable-next=consider-using-f-string
                     log("Optional package '{0}' not found".format(pkgname))
@@ -763,11 +851,18 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
                     if len(alt) > 1:
                         # pylint: disable-next=consider-using-f-string
                         messages.append("ERROR: none of %s found" % altpretty)
+                    elif pkgname in incompatible_names:
+                        messages.append(
+                            f"ERROR: no version of package '{pkgname}' compatible with the Salt Master found"
+                        )
                     else:
                         # pylint: disable-next=consider-using-f-string
                         messages.append("ERROR: package '%s' not found" % pkgname)
                     errors += 1
-                    if not suggestions["no-packages"]:
+                    if (
+                        not suggestions["no-packages"]
+                        and pkgname not in incompatible_names
+                    ):
                         suggestions["no-packages"] = (
                             "mgr-create-bootstrap-repo uses the locally synchronized versions of files\n"
                             + "from the Tools repository, and uses the locally synchronized pool channel\n"
@@ -883,6 +978,10 @@ def create_repo(label, options, mgr_bootstrap_data, additional=[]):
                     # pylint: disable-next=consider-using-f-string
                     venv_enabled_file.write("{}  {}\n".format(dg.hexdigest(), rel_path))
                     venv_enabled_file.close()
+        with open(
+            os.path.join(destdirtmp, SALT_PROTOCOL_ABI_FILE), "w", encoding="utf-8"
+        ) as abi_file:
+            abi_file.write(str(master_abi or "") + "\n")
         # move tmp dir to final location
         if os.path.exists(destdir):
             os.rename(destdir, destdirold)
@@ -952,6 +1051,7 @@ def connected_to_rhel_cdn(root_channel_labels):
 
 def find_dists_for_regeneration(dest, dists, doall=False):
     regenerate = []
+    master_abi = str(get_master_salt_protocol_abi() or "")
     for label, dist in dists.items():
         if label in ("RHEL8-x86_64", "RHEL9-x86_64") and "PDID" in dist:
             if not connected_to_rhel_cdn(
@@ -964,6 +1064,16 @@ def find_dists_for_regeneration(dest, dists, doall=False):
         destfile = os.path.join(dest, "repodata", "repomd.xml")
         if "TYPE" in dist and dist["TYPE"] == "deb":
             destfile = os.path.join(dest, "dists", "bootstrap", "Release")
+
+        repo_abi = read_repo_salt_protocol_abi(dest)
+        if os.path.exists(destfile) and repo_abi != master_abi:
+            log(
+                f"{label} was created for Salt protocol ABI '{repo_abi}', "
+                f"the Salt Master has '{master_abi}'. Regenerate bootstrap repo.",
+                2,
+            )
+            regenerate.append(label)
+            continue
 
         filemodtime = 0
         if os.path.exists(destfile):

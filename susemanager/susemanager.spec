@@ -244,6 +244,7 @@ sed -i '/You can access .* via https:\/\//d' /tmp/motd 2> /dev/null ||:
 %{pythonsmroot}/susemanager/errata_helper.py*
 %{pythonsmroot}/susemanager/helpers.py*
 %{pythonsmroot}/susemanager/package_helper.py*
+%{pythonsmroot}/susemanager/salt_protocol_abi.py*
 %{pythonsmroot}/susemanager/mgr_sync
 %{_datadir}/susemanager/mgr_bootstrap_data.py*
 %{pythonsmroot}/susemanager/__pycache__/
