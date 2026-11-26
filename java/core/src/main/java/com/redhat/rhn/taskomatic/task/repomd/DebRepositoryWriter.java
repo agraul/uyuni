@@ -35,6 +35,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
 
@@ -114,6 +115,8 @@ public class DebRepositoryWriter extends RepositoryWriter {
         log.info("Generating new DEB repository for channel {}", channel.getLabel());
         Date start = new Date();
 
+        Set<Long> excludedPackageIds = findIncompatibleSaltPackageIds(channel);
+
         // batch the elaboration so we don't have to hold many thousands of
         // packages in memory at once
         final int batchSize = 1000;
@@ -124,6 +127,9 @@ public class DebRepositoryWriter extends RepositoryWriter {
                 packageBatch.elaborate();
                 loadExtraTags(packageBatch);
                 for (PackageDto pkgDto : packageBatch) {
+                    if (excludedPackageIds.contains(pkgDto.getId())) {
+                        continue;
+                    }
                     writer.addPackage(pkgDto);
                 }
                 log.info("Processed {} packages", i + packageBatch.getEnd());
